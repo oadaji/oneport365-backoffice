@@ -1,0 +1,373 @@
+// @ts-nocheck
+import { Router, Request, Response } from "express";
+import { ImapFlow } from "imapflow";
+import { simpleParser } from "mailparser";
+import { Readable } from "stream";
+import nodemailer from "nodemailer";
+import { Email } from "../models/email";
+import { EmailAccount } from "../models/email-account";
+import { Rfq } from "../models/rfq";
+import { isAutomatedEmail, normaliseMessageId } from "../lib/email-filters";
+import { extractWithClaude, preClassifyEmail } from "../lib/ai-extract";
+import { resolveContact } from "../lib/resolve-contact";
+import crypto from "crypto";
+
+const router = Router();
+
+function generateRef(): string {
+  const now = new Date();
+  const yymm = String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, "0");
+  const rand = String(Math.floor(Math.random() * 9000) + 1000);
+  return `RFQ-${yymm}-${rand}`;
+}
+
+async function getAccountsToSync() {
+  const accounts: Array<{ id: string; email: string; host: string; port: number; user: string; pass: string; label: string; isEnv: boolean }> = [];
+
+  // Env-var account
+  if (process.env.GMAIL_ADDRESS && process.env.GMAIL_APP_PASSWORD) {
+    accounts.push({
+      id: "env",
+      email: process.env.GMAIL_ADDRESS,
+      host: "imap.gmail.com",
+      port: 993,
+      user: process.env.GMAIL_ADDRESS,
+      pass: process.env.GMAIL_APP_PASSWORD,
+      label: "Primary Gmail",
+      isEnv: true,
+    });
+  }
+
+  // DB accounts
+  const dbAccounts = await EmailAccount.find({ active: true });
+  for (const acc of dbAccounts) {
+    if (accounts.some((a) => a.email === acc.email)) continue;
+    const isOutlook = ["outlook", "hotmail", "live", "msn"].some((d) => acc.email.includes(d));
+    accounts.push({
+      id: acc._id.toString(),
+      email: acc.email,
+      host: acc.imapHost || (isOutlook ? "outlook.office365.com" : "imap.gmail.com"),
+      port: acc.imapPort || 993,
+      user: acc.email,
+      pass: acc.password,
+      label: acc.label || acc.email,
+      isEnv: false,
+    });
+  }
+
+  return accounts;
+}
+
+// POST /api/gmail/sync — sync all configured inboxes
+router.post("/gmail/sync", async (req: Request, res: Response) => {
+  const maxResults = 20;
+  const accounts = await getAccountsToSync();
+
+  if (!accounts.length) {
+    res.json({ synced: 0, skipped: 0, errors: ["No email accounts configured"] });
+    return;
+  }
+
+  let totalSynced = 0;
+  let totalSkipped = 0;
+  const errors: string[] = [];
+
+  for (const account of accounts) {
+    try {
+      const client = new ImapFlow({
+        host: account.host,
+        port: account.port,
+        secure: true,
+        auth: { user: account.user, pass: account.pass },
+        logger: false,
+      });
+
+      client.on("error", () => {});
+      await client.connect();
+
+      const lock = await client.getMailboxLock("INBOX");
+      try {
+        const status = await client.status("INBOX", { messages: true });
+        const total = status.messages || 0;
+        if (total === 0) continue;
+
+        const startUid = Math.max(1, total - maxResults + 1);
+        const range = `${startUid}:${total}`;
+
+        for await (const msg of client.fetch(range, { envelope: true, source: true, internalDate: true })) {
+          try {
+            const source = msg.source;
+            if (!source) continue;
+            const parsed = await simpleParser(Readable.from(source));
+
+            const fromAddr = parsed.from?.value?.[0];
+            if (!fromAddr?.address) continue;
+
+            const fromEmail = fromAddr.address.toLowerCase();
+            const fromName = fromAddr.name || fromEmail;
+            const subject = parsed.subject || "(no subject)";
+            const body = parsed.text || parsed.html || "";
+            const messageId = normaliseMessageId(parsed.messageId);
+            const inReplyTo = normaliseMessageId(parsed.inReplyTo as string);
+            const cc = parsed.cc ? (Array.isArray(parsed.cc) ? parsed.cc : [parsed.cc]).map((c) => c.text).join(", ") : null;
+
+            // Build unique UID
+            const uid = messageId ? `mid:${messageId}` : `${account.email}:${msg.seq}`;
+
+            // Skip automated emails
+            if (isAutomatedEmail({ fromEmail, subject, headers: parsed.headers as any })) {
+              totalSkipped++;
+              continue;
+            }
+
+            // Check if already ingested
+            const existing = await Email.findOne({ uid });
+            if (existing) {
+              totalSkipped++;
+              continue;
+            }
+
+            // Threading: check if this is a reply to an existing RFQ
+            if (inReplyTo) {
+              const parentEmail = await Email.findOne({ messageId: inReplyTo });
+              if (parentEmail) {
+                const parentRfq = await Rfq.findOne({ emailId: parentEmail._id });
+                if (parentRfq) {
+                  // Save reply email
+                  const replyEmail = await Email.create({
+                    uid,
+                    fromName,
+                    fromEmail,
+                    subject,
+                    body: typeof body === "string" ? body : "",
+                    emailType: "customer-rfq",
+                    receivedAt: parsed.date || new Date(),
+                    messageId,
+                    inReplyTo,
+                    parentEmailId: parentEmail._id,
+                    cc,
+                    receivedInbox: account.label,
+                    contactId: parentEmail.contactId,
+                  });
+
+                  // Re-extract with full thread
+                  const thread = `Original:\n${parentEmail.body}\n\n──────────────\nReply:\n${body}`;
+                  const extraction = await extractWithClaude(
+                    { fromName, fromEmail, subject, body: thread },
+                    "customer-rfq"
+                  );
+
+                  if (extraction.shipments.length > 0) {
+                    const s = extraction.shipments[0];
+                    await Rfq.findByIdAndUpdate(parentRfq._id, {
+                      status: s.status,
+                      fields: s.fields,
+                      missingFields: s.missing,
+                      followUpDraft: extraction.combinedDraft || s.draft,
+                    });
+                  }
+
+                  totalSynced++;
+                  continue;
+                }
+              }
+            }
+
+            // Subject-based threading fallback for "Re:" emails
+            if (subject.toLowerCase().startsWith("re:")) {
+              const baseSubject = subject.replace(/^(re:\s*)+/i, "").trim();
+              const matchEmail = await Email.findOne({
+                fromEmail,
+                subject: new RegExp(`^${baseSubject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+              }).sort({ _id: -1 });
+
+              if (matchEmail) {
+                const matchRfq = await Rfq.findOne({ emailId: matchEmail._id });
+                if (matchRfq) {
+                  await Email.create({
+                    uid, fromName, fromEmail, subject,
+                    body: typeof body === "string" ? body : "",
+                    emailType: "customer-rfq",
+                    receivedAt: parsed.date || new Date(),
+                    messageId, inReplyTo, parentEmailId: matchEmail._id,
+                    cc, receivedInbox: account.label, contactId: matchEmail.contactId,
+                  });
+
+                  const thread = `Original:\n${matchEmail.body}\n\n──────────────\nReply:\n${body}`;
+                  const extraction = await extractWithClaude(
+                    { fromName, fromEmail, subject, body: thread },
+                    "customer-rfq"
+                  );
+
+                  if (extraction.shipments.length > 0) {
+                    const s = extraction.shipments[0];
+                    await Rfq.findByIdAndUpdate(matchRfq._id, {
+                      status: s.status,
+                      fields: s.fields,
+                      missingFields: s.missing,
+                      followUpDraft: extraction.combinedDraft || s.draft,
+                    });
+                  }
+
+                  totalSynced++;
+                  continue;
+                }
+              }
+            }
+
+            // New email — resolve contact & ingest
+            const crm = await resolveContact({
+              email: fromEmail,
+              name: fromName,
+              source: "email",
+            });
+
+            const emailDoc = await Email.create({
+              uid, fromName, fromEmail, subject,
+              body: typeof body === "string" ? body : "",
+              emailType: "customer-rfq",
+              receivedAt: parsed.date || new Date(),
+              messageId, cc,
+              receivedInbox: account.label,
+              contactId: crm.contactId,
+            });
+
+            // Pre-classify before Claude
+            const preClass = preClassifyEmail({ fromName, fromEmail, subject, body: typeof body === "string" ? body : "" });
+            if (preClass && preClass !== "customer-rfq" && preClass !== "internal-rfq") {
+              await Email.findByIdAndUpdate(emailDoc._id, { emailType: preClass });
+              totalSynced++;
+              continue;
+            }
+
+            // Claude extraction
+            const extraction = await extractWithClaude(
+              { fromName, fromEmail, subject, body: typeof body === "string" ? body : "" },
+              "customer-rfq"
+            );
+
+            const resolvedType = extraction.detectedEmailType || "customer-rfq";
+            if (resolvedType !== "customer-rfq" && resolvedType !== "internal-rfq") {
+              await Email.findByIdAndUpdate(emailDoc._id, { emailType: resolvedType });
+              totalSynced++;
+              continue;
+            }
+
+            // Check freight match
+            const hasRoute = extraction.shipments.some((s) =>
+              s.fields.some((f) => (f.k === "POL" || f.k === "POD") && f.ok)
+            );
+            if (!hasRoute) {
+              await Email.findByIdAndUpdate(emailDoc._id, { emailType: "rejected" });
+              totalSkipped++;
+              continue;
+            }
+
+            // Create RFQs
+            const isGroup = extraction.shipments.length > 1;
+            const groupId = isGroup ? crypto.randomUUID() : undefined;
+
+            for (let idx = 0; idx < extraction.shipments.length; idx++) {
+              const s = extraction.shipments[idx];
+              await Rfq.create({
+                emailId: emailDoc._id,
+                ref: generateRef(),
+                emailType: resolvedType,
+                status: s.status,
+                fields: s.fields,
+                missingFields: s.missing,
+                followUpDraft: isGroup ? (idx === 0 ? extraction.combinedDraft : null) : (extraction.combinedDraft || s.draft),
+                groupId,
+                groupIndex: isGroup ? idx + 1 : undefined,
+                groupTotal: isGroup ? extraction.shipments.length : undefined,
+                sourceMessageId: messageId || undefined,
+                companyId: crm.companyId || undefined,
+                contactId: crm.contactId,
+              });
+            }
+
+            totalSynced++;
+          } catch (msgErr) {
+            console.error("Error processing message:", msgErr);
+          }
+        }
+      } finally {
+        lock.release();
+      }
+
+      await client.logout();
+
+      // Update last synced
+      if (!account.isEnv) {
+        await EmailAccount.findByIdAndUpdate(account.id, { lastSyncedAt: new Date(), lastError: null });
+      }
+    } catch (accErr: any) {
+      const errMsg = `${account.label}: ${accErr.message}`;
+      errors.push(errMsg);
+      if (!account.isEnv) {
+        await EmailAccount.findByIdAndUpdate(account.id, { lastError: accErr.message });
+      }
+    }
+  }
+
+  res.json({ synced: totalSynced, skipped: totalSkipped, accountsChecked: accounts.length, errors });
+});
+
+// GET /api/gmail/status — test IMAP connections
+router.get("/gmail/status", async (_req: Request, res: Response) => {
+  const accounts = await getAccountsToSync();
+  const results = await Promise.all(
+    accounts.map(async (acc) => {
+      try {
+        const client = new ImapFlow({
+          host: acc.host, port: acc.port, secure: true,
+          auth: { user: acc.user, pass: acc.pass },
+          logger: false,
+        });
+        client.on("error", () => {});
+        await client.connect();
+        const status = await client.status("INBOX", { messages: true, unseen: true });
+        await client.logout();
+        return { email: acc.email, ok: true, messages: status.messages, unseen: status.unseen };
+      } catch (err: any) {
+        return { email: acc.email, ok: false, error: err.message };
+      }
+    })
+  );
+  res.json(results);
+});
+
+// POST /api/gmail/send — send email via SMTP
+router.post("/gmail/send", async (req: Request, res: Response) => {
+  try {
+    const { from, to, cc, subject, body } = req.body;
+    const fromEmail = from || process.env.GMAIL_ADDRESS;
+    const fromPass = process.env.GMAIL_APP_PASSWORD;
+
+    if (!fromEmail || !fromPass) {
+      res.status(400).json({ error: "No Gmail credentials configured" });
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: { user: fromEmail, pass: fromPass },
+    });
+
+    await transporter.sendMail({
+      from: fromEmail,
+      to,
+      cc: cc || undefined,
+      subject,
+      text: body,
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to send email", details: err.message });
+  }
+});
+
+export { router as gmailRouter };

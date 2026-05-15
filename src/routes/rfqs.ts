@@ -88,4 +88,97 @@ router.delete("/rfqs/:id", async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/rfqs/:id/send-followup — send follow-up email
+router.post("/rfqs/:id/send-followup", async (req: Request, res: Response) => {
+  try {
+    const rfq = await Rfq.findById(req.params.id).populate("emailId");
+    if (!rfq) { res.status(404).json({ error: "RFQ not found" }); return; }
+
+    const email = rfq.emailId as any;
+    const { draft, fromEmail, cc } = req.body;
+
+    if (!process.env.GMAIL_ADDRESS || !process.env.GMAIL_APP_PASSWORD) {
+      res.status(400).json({ error: "Gmail credentials not configured" });
+      return;
+    }
+
+    const nodemailer = require("nodemailer");
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: { user: fromEmail || process.env.GMAIL_ADDRESS, pass: process.env.GMAIL_APP_PASSWORD },
+    });
+
+    await transporter.sendMail({
+      from: fromEmail || process.env.GMAIL_ADDRESS,
+      to: email?.fromEmail,
+      cc: cc || undefined,
+      subject: `Re: ${email?.subject || ""}`,
+      text: draft,
+    });
+
+    await Rfq.findByIdAndUpdate(rfq._id, { status: "replied", followUpDraft: draft });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to send follow-up", details: err.message });
+  }
+});
+
+// GET /api/rfqs/:id/thread — get email thread
+router.get("/rfqs/:id/thread", async (req: Request, res: Response) => {
+  try {
+    const rfq = await Rfq.findById(req.params.id);
+    if (!rfq || !rfq.emailId) { res.status(404).json({ error: "RFQ not found" }); return; }
+
+    const originalEmail = await Email.findById(rfq.emailId);
+    if (!originalEmail) { res.json([]); return; }
+
+    // Find all replies in thread
+    const thread = await Email.find({
+      $or: [
+        { _id: originalEmail._id },
+        { parentEmailId: originalEmail._id },
+        { inReplyTo: originalEmail.messageId },
+      ],
+    }).sort({ receivedAt: 1 });
+
+    res.json(thread);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to get thread" });
+  }
+});
+
+// POST /api/rfqs/:id/re-extract — re-run Claude extraction
+router.post("/rfqs/:id/re-extract", async (req: Request, res: Response) => {
+  try {
+    const rfq = await Rfq.findById(req.params.id).populate("emailId");
+    if (!rfq) { res.status(404).json({ error: "RFQ not found" }); return; }
+
+    const email = rfq.emailId as any;
+    if (!email) { res.status(400).json({ error: "No email linked" }); return; }
+
+    const { extractWithClaude } = require("../lib/ai-extract");
+    const extraction = await extractWithClaude(
+      { fromName: email.fromName, fromEmail: email.fromEmail, subject: email.subject, body: email.body },
+      rfq.emailType
+    );
+
+    if (extraction.shipments.length > 0) {
+      const s = extraction.shipments[0];
+      const updated = await Rfq.findByIdAndUpdate(rfq._id, {
+        status: s.status,
+        fields: s.fields,
+        missingFields: s.missing,
+        followUpDraft: extraction.combinedDraft || s.draft,
+      }, { new: true });
+      res.json(updated);
+    } else {
+      res.json(rfq);
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Failed to re-extract" });
+  }
+});
+
 export { router as rfqsRouter };

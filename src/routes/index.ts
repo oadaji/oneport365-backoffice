@@ -8,6 +8,8 @@ import { ratesRouter } from "./rates";
 import { partnersRouter } from "./partners";
 import { settingsRouter } from "./settings";
 import { seedRouter } from "./seed";
+import { gmailRouter } from "./gmail";
+import { emailAccountsRouter } from "./email-accounts";
 
 const router = Router();
 
@@ -20,5 +22,7 @@ router.use(ratesRouter);
 router.use(partnersRouter);
 router.use(settingsRouter);
 router.use(seedRouter);
+router.use(gmailRouter);
+router.use(emailAccountsRouter);
 
 export default router;
