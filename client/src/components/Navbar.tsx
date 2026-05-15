@@ -40,8 +40,7 @@ export default function Navbar() {
       <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginRight: 20, cursor: "pointer" }} onClick={() => navigate("/")}>
-          <div style={{ width: 28, height: 28, borderRadius: 5, backgroundColor: "#3d7a2d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 12 }}>O</div>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>OnePort<span style={{ color: "#7AB648" }}>365</span></span>
+          <img src="/oneport365-logo.png" alt="OnePort 365" style={{ height: 28, width: "auto" }} />
         </div>
 
         {/* Nav items */}
