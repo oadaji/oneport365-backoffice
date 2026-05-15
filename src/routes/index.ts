@@ -7,6 +7,7 @@ import { quotesRouter } from "./quotes";
 import { ratesRouter } from "./rates";
 import { partnersRouter } from "./partners";
 import { settingsRouter } from "./settings";
+import { seedRouter } from "./seed";
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use(quotesRouter);
 router.use(ratesRouter);
 router.use(partnersRouter);
 router.use(settingsRouter);
+router.use(seedRouter);
 
 export default router;
