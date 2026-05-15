@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Mail, MessageCircle, DollarSign, FileText, Settings } from "lucide-react";
+import { Mail, MessageCircle, FileText } from "lucide-react";
 import api from "../lib/api";
 
 export default function Navbar() {
@@ -30,6 +30,7 @@ export default function Navbar() {
   const navItems = [
     { path: "/crm", label: "CRM", count: counts.companies, icon: null },
     { path: "/", label: "", icon: Mail, count: counts.rfqs },
+    { path: "/whatsapp", label: "", icon: MessageCircle, count: 5 },
     { path: "/rates", label: "$ Rates", icon: null, count: null },
     { path: "/quotes", label: "Quotes", icon: FileText, count: counts.quotes },
   ];
