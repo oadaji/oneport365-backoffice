@@ -1,0 +1,103 @@
+import { Router, Request, Response } from "express";
+import { EmailAccount } from "../models/email-account";
+import {
+  getAuthUrl,
+  exchangeCode,
+  refreshAccessToken,
+} from "../lib/microsoft-oauth";
+
+const router = Router();
+
+// GET /api/auth/microsoft — redirect user to Azure AD login
+router.get("/auth/microsoft", async (_req: Request, res: Response) => {
+  try {
+    if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET) {
+      res.status(500).json({ error: "Microsoft OAuth not configured — set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET in .env" });
+      return;
+    }
+    const shared = _req.query.shared === "true" ? "shared" : "";
+    const url = await getAuthUrl(shared);
+    res.redirect(url);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to generate auth URL", details: err.message });
+  }
+});
+
+// GET /api/auth/microsoft/callback — exchange code for tokens, create/update email account
+router.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
+  try {
+    const code = req.query.code as string;
+    if (!code) {
+      res.status(400).json({ error: "Missing authorization code" });
+      return;
+    }
+
+    const tokens = await exchangeCode(code);
+    const isShared = (req.query.state as string) === "shared";
+
+    if (!tokens.email) {
+      res.status(400).json({ error: "Could not determine email from Microsoft account" });
+      return;
+    }
+
+    // Upsert email account
+    const existing = await EmailAccount.findOne({ email: tokens.email });
+    if (existing) {
+      existing.accessToken = tokens.accessToken;
+      existing.refreshToken = tokens.refreshToken;
+      existing.tokenExpiresAt = tokens.expiresAt;
+      existing.authType = "oauth2";
+      existing.provider = "outlook";
+      existing.active = true;
+      existing.shared = isShared;
+      existing.lastError = undefined;
+      await existing.save();
+    } else {
+      await EmailAccount.create({
+        email: tokens.email,
+        label: tokens.name || tokens.email,
+        provider: "outlook",
+        authType: "oauth2",
+        shared: isShared,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        tokenExpiresAt: tokens.expiresAt,
+        imapHost: "outlook.office365.com",
+        imapPort: 993,
+        active: true,
+      });
+    }
+
+    // Redirect to frontend settings page
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    res.redirect(`${frontendUrl}/settings?outlook=connected&email=${encodeURIComponent(tokens.email)}`);
+  } catch (err: any) {
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    res.redirect(`${frontendUrl}/settings?outlook=error&message=${encodeURIComponent(err.message)}`);
+  }
+});
+
+// POST /api/auth/microsoft/refresh/:id — manually refresh token for an account
+router.post("/auth/microsoft/refresh/:id", async (req: Request, res: Response) => {
+  try {
+    const account = await EmailAccount.findById(req.params.id);
+    if (!account) { res.status(404).json({ error: "Account not found" }); return; }
+    if (account.authType !== "oauth2" || !account.refreshToken) {
+      res.status(400).json({ error: "Account is not using OAuth2" });
+      return;
+    }
+
+    const refreshed = await refreshAccessToken(account.refreshToken);
+    account.accessToken = refreshed.accessToken;
+    account.refreshToken = refreshed.refreshToken;
+    account.tokenExpiresAt = refreshed.expiresAt;
+    account.lastError = undefined;
+    await account.save();
+
+    res.json({ ok: true, expiresAt: refreshed.expiresAt });
+  } catch (err: any) {
+    res.status(500).json({ error: "Token refresh failed", details: err.message });
+  }
+});
+
+export { router as microsoftAuthRouter };

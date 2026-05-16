@@ -10,6 +10,7 @@ import { settingsRouter } from "./settings";
 import { seedRouter } from "./seed";
 import { gmailRouter } from "./gmail";
 import { emailAccountsRouter } from "./email-accounts";
+import { microsoftAuthRouter } from "./microsoft-auth";
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use(settingsRouter);
 router.use(seedRouter);
 router.use(gmailRouter);
 router.use(emailAccountsRouter);
+router.use(microsoftAuthRouter);
 
 export default router;

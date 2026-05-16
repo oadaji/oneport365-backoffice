@@ -11,6 +11,7 @@ export interface IEmailAccount extends Document {
   lastSyncedAt?: Date;
   lastError?: string;
   authType: "password" | "oauth2";
+  shared: boolean;
   refreshToken?: string;
   accessToken?: string;
   tokenExpiresAt?: Date;
@@ -24,10 +25,11 @@ const emailAccountSchema = new Schema<IEmailAccount>(
     provider: { type: String, default: "gmail", enum: ["gmail", "outlook", "imap"] },
     imapHost: String,
     imapPort: Number,
-    password: { type: String, required: true },
+    password: { type: String, default: "" },
     active: { type: Boolean, default: true },
     lastSyncedAt: Date,
     lastError: String,
+    shared: { type: Boolean, default: false },
     authType: { type: String, default: "password", enum: ["password", "oauth2"] },
     refreshToken: String,
     accessToken: String,

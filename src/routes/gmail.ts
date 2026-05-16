@@ -10,6 +10,7 @@ import { Rfq } from "../models/rfq";
 import { isAutomatedEmail, normaliseMessageId } from "../lib/email-filters";
 import { extractWithClaude, preClassifyEmail } from "../lib/ai-extract";
 import { resolveContact } from "../lib/resolve-contact";
+import { getValidToken, refreshAccessToken } from "../lib/microsoft-oauth";
 import crypto from "crypto";
 
 const router = Router();
@@ -21,8 +22,23 @@ function generateRef(): string {
   return `RFQ-${yymm}-${rand}`;
 }
 
-async function getAccountsToSync() {
-  const accounts: Array<{ id: string; email: string; host: string; port: number; user: string; pass: string; label: string; isEnv: boolean }> = [];
+interface SyncAccount {
+  id: string;
+  email: string;
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+  label: string;
+  isEnv: boolean;
+  authType: "password" | "oauth2";
+  accessToken?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: Date;
+}
+
+async function getAccountsToSync(): Promise<SyncAccount[]> {
+  const accounts: SyncAccount[] = [];
 
   // Env-var account
   if (process.env.GMAIL_ADDRESS && process.env.GMAIL_APP_PASSWORD) {
@@ -35,6 +51,7 @@ async function getAccountsToSync() {
       pass: process.env.GMAIL_APP_PASSWORD,
       label: "Primary Gmail",
       isEnv: true,
+      authType: "password",
     });
   }
 
@@ -43,19 +60,72 @@ async function getAccountsToSync() {
   for (const acc of dbAccounts) {
     if (accounts.some((a) => a.email === acc.email)) continue;
     const isOutlook = ["outlook", "hotmail", "live", "msn"].some((d) => acc.email.includes(d));
-    accounts.push({
+
+    const syncAcc: SyncAccount = {
       id: acc._id.toString(),
       email: acc.email,
       host: acc.imapHost || (isOutlook ? "outlook.office365.com" : "imap.gmail.com"),
       port: acc.imapPort || 993,
       user: acc.email,
-      pass: acc.password,
+      pass: acc.password || "",
       label: acc.label || acc.email,
       isEnv: false,
-    });
+      authType: acc.authType || "password",
+      accessToken: acc.accessToken,
+      refreshToken: acc.refreshToken,
+      tokenExpiresAt: acc.tokenExpiresAt,
+    };
+
+    // For OAuth2 accounts, get a valid access token (refresh if needed)
+    if (acc.authType === "oauth2" && acc.refreshToken) {
+      try {
+        const token = await getValidToken(acc);
+        syncAcc.accessToken = token;
+
+        // If token was refreshed, persist new tokens
+        if (token !== acc.accessToken) {
+          const refreshed = await refreshAccessToken(acc.refreshToken);
+          await EmailAccount.findByIdAndUpdate(acc._id, {
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+            tokenExpiresAt: refreshed.expiresAt,
+          });
+          syncAcc.accessToken = refreshed.accessToken;
+        }
+      } catch (err: any) {
+        await EmailAccount.findByIdAndUpdate(acc._id, { lastError: `OAuth2 token refresh failed: ${err.message}` });
+        continue; // skip this account
+      }
+    }
+
+    accounts.push(syncAcc);
   }
 
   return accounts;
+}
+
+/** Build an ImapFlow client for the given account */
+function createImapClient(account: SyncAccount): ImapFlow {
+  if (account.authType === "oauth2" && account.accessToken) {
+    return new ImapFlow({
+      host: account.host,
+      port: account.port,
+      secure: true,
+      auth: {
+        user: account.user,
+        accessToken: account.accessToken,
+      },
+      logger: false,
+    });
+  }
+
+  return new ImapFlow({
+    host: account.host,
+    port: account.port,
+    secure: true,
+    auth: { user: account.user, pass: account.pass },
+    logger: false,
+  });
 }
 
 // POST /api/gmail/sync — sync all configured inboxes
@@ -74,13 +144,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
 
   for (const account of accounts) {
     try {
-      const client = new ImapFlow({
-        host: account.host,
-        port: account.port,
-        secure: true,
-        auth: { user: account.user, pass: account.pass },
-        logger: false,
-      });
+      const client = createImapClient(account);
 
       client.on("error", () => {});
       await client.connect();
@@ -319,11 +383,7 @@ router.get("/gmail/status", async (_req: Request, res: Response) => {
   const results = await Promise.all(
     accounts.map(async (acc) => {
       try {
-        const client = new ImapFlow({
-          host: acc.host, port: acc.port, secure: true,
-          auth: { user: acc.user, pass: acc.pass },
-          logger: false,
-        });
+        const client = createImapClient(acc);
         client.on("error", () => {});
         await client.connect();
         const status = await client.status("INBOX", { messages: true, unseen: true });
@@ -337,24 +397,48 @@ router.get("/gmail/status", async (_req: Request, res: Response) => {
   res.json(results);
 });
 
-// POST /api/gmail/send — send email via SMTP
+// POST /api/gmail/send — send email via SMTP (Gmail or Outlook OAuth2)
 router.post("/gmail/send", async (req: Request, res: Response) => {
   try {
     const { from, to, cc, subject, body } = req.body;
     const fromEmail = from || process.env.GMAIL_ADDRESS;
-    const fromPass = process.env.GMAIL_APP_PASSWORD;
 
-    if (!fromEmail || !fromPass) {
-      res.status(400).json({ error: "No Gmail credentials configured" });
+    // Check if sender is an OAuth2 Outlook account
+    let transporter: nodemailer.Transporter;
+
+    if (fromEmail) {
+      const dbAccount = await EmailAccount.findOne({ email: fromEmail, authType: "oauth2", provider: "outlook" });
+      if (dbAccount && dbAccount.refreshToken) {
+        // Outlook OAuth2 SMTP
+        const token = await getValidToken(dbAccount);
+        transporter = nodemailer.createTransport({
+          host: "smtp.office365.com",
+          port: 587,
+          secure: false,
+          auth: {
+            type: "OAuth2",
+            user: fromEmail,
+            accessToken: token,
+          },
+        } as any);
+      } else {
+        // Gmail app password
+        const fromPass = process.env.GMAIL_APP_PASSWORD;
+        if (!fromPass) {
+          res.status(400).json({ error: "No email credentials configured for this sender" });
+          return;
+        }
+        transporter = nodemailer.createTransport({
+          host: "smtp.gmail.com",
+          port: 465,
+          secure: true,
+          auth: { user: fromEmail, pass: fromPass },
+        });
+      }
+    } else {
+      res.status(400).json({ error: "No sender email configured" });
       return;
     }
-
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: { user: fromEmail, pass: fromPass },
-    });
 
     await transporter.sendMail({
       from: fromEmail,
