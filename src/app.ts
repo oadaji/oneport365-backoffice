@@ -12,7 +12,7 @@ app.use("/api", routes);
 // Serve React frontend in production
 const clientBuild = path.join(__dirname, "..", "client", "build");
 app.use(express.static(clientBuild));
-app.get("*", (_req, res) => {
+app.get("/{*splat}", (_req, res) => {
   res.sendFile(path.join(clientBuild, "index.html"));
 });
 
