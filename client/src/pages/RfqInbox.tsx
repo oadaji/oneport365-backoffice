@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Mail, RefreshCw, Archive, Trash2 } from "lucide-react";
+import { Mail, RefreshCw, Archive, Trash2, X, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import api from "../lib/api";
 
 interface Rfq {
@@ -15,6 +15,315 @@ interface Rfq {
   company?: { _id: string; name: string };
   contact?: { _id: string; firstName: string; lastName?: string; email?: string };
   createdAt: string;
+}
+
+interface EmailAccount {
+  _id?: string;
+  id?: string;
+  label: string;
+  email: string;
+  provider: "gmail" | "outlook" | "imap";
+  authType?: "password" | "oauth2";
+  shared?: boolean;
+  active: boolean;
+  isEnvAccount?: boolean;
+  lastSyncedAt?: string;
+  lastError?: string;
+}
+
+function timeSince(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
+  const [accounts, setAccounts] = useState<EmailAccount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [connectMode, setConnectMode] = useState<"" | "gmail">("");
+  const [gmailForm, setGmailForm] = useState({ email: "", password: "" });
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const fetchAccounts = async () => {
+    try {
+      const { data } = await api.get("/email-accounts");
+      setAccounts(data);
+    } catch (err) {
+      console.error("Failed to load accounts", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchAccounts(); }, []);
+
+  const removeAccount = async (acc: EmailAccount) => {
+    if (acc.isEnvAccount) return;
+    const id = acc._id || acc.id;
+    if (!window.confirm(`Remove ${acc.email}?`)) return;
+    try {
+      await api.delete(`/email-accounts/${id}`);
+      setAccounts((prev) => prev.filter((a) => (a._id || a.id) !== id));
+    } catch (err) {
+      console.error("Failed to remove", err);
+    }
+  };
+
+  const testCredentials = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const { data } = await api.post("/email-accounts/test-credentials", {
+        email: gmailForm.email,
+        password: gmailForm.password,
+      });
+      setTestResult(data);
+    } catch {
+      setTestResult({ ok: false, message: "Connection failed" });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const saveGmail = async () => {
+    setSaving(true);
+    try {
+      await api.post("/email-accounts", {
+        email: gmailForm.email,
+        password: gmailForm.password,
+        label: gmailForm.email,
+        provider: "gmail",
+      });
+      setGmailForm({ email: "", password: "" });
+      setConnectMode("");
+      setTestResult(null);
+      await fetchAccounts();
+    } catch (err: any) {
+      setTestResult({ ok: false, message: err.response?.data?.error || "Failed to save" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const connectOutlook = (shared = false) => {
+    const baseUrl = process.env.REACT_APP_API_URL || "http://localhost:5001/api";
+    window.location.href = `${baseUrl}/auth/microsoft${shared ? "?shared=true" : ""}`;
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "10px 14px",
+    fontSize: 13,
+    border: "1px solid var(--border2)",
+    borderRadius: 8,
+    fontFamily: "Inter, sans-serif",
+    outline: "none",
+    color: "var(--text)",
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+        background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 1000,
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: "var(--surface)", borderRadius: 14, width: 560, maxHeight: "80vh",
+        overflow: "auto", padding: "24px 28px", position: "relative",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+      }}>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)" }}>Email Monitoring</div>
+            <div style={{ fontSize: 13, color: "var(--text3)", marginTop: 4, lineHeight: 1.5 }}>
+              Connect Gmail & Outlook inboxes to monitor for RFQs. Emails sent to multiple addresses are captured once.
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none", border: "none", cursor: "pointer", padding: 4,
+              color: "var(--text3)", fontSize: 18, lineHeight: 1,
+            }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Connected Inboxes */}
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>
+          Connected Inboxes
+        </div>
+
+        {loading ? (
+          <div style={{ fontSize: 12, color: "var(--text3)", textAlign: "center", padding: 20 }}>Loading...</div>
+        ) : accounts.length === 0 ? (
+          <div style={{ fontSize: 13, color: "var(--text3)", textAlign: "center", padding: 24 }}>
+            No inboxes connected yet.
+          </div>
+        ) : (
+          <div style={{ marginBottom: 24 }}>
+            {accounts.map((acc) => {
+              const id = acc._id || acc.id;
+              const synced = !!acc.lastSyncedAt;
+              const hasError = !!acc.lastError;
+              return (
+                <div
+                  key={id}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 14, padding: "14px 0",
+                    borderBottom: "1px solid var(--border)",
+                  }}
+                >
+                  {/* Provider icon */}
+                  <div style={{
+                    width: 36, height: 36, borderRadius: "50%", display: "flex",
+                    alignItems: "center", justifyContent: "center", flexShrink: 0,
+                    background: acc.provider === "outlook" ? "#e8f0fe" : "#fef2f2",
+                    border: `1px solid ${acc.provider === "outlook" ? "#bdd4f7" : "#fecaca"}`,
+                  }}>
+                    {acc.provider === "outlook" ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <rect x="2" y="4" width="20" height="16" rx="2" stroke="#0078D4" strokeWidth="2" fill="none"/>
+                        <path d="M2 6l10 7 10-7" stroke="#0078D4" strokeWidth="2" strokeLinecap="round"/>
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <path d="M2 6l10 7 10-7" stroke="#EA4335" strokeWidth="2" strokeLinecap="round"/>
+                        <rect x="2" y="4" width="20" height="16" rx="2" stroke="#4285F4" strokeWidth="2" fill="none"/>
+                      </svg>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text)" }}>{acc.email}</span>
+                      {acc.shared && <span className="badge b-ok" style={{ fontSize: 10 }}>shared</span>}
+                      {acc.authType === "oauth2" && <span className="badge b-rate" style={{ fontSize: 10 }}>OAuth</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
+                      {acc.provider === "outlook" ? "Outlook" : "Gmail"} &middot;{" "}
+                      {hasError ? (
+                        <span style={{ color: "var(--danger)" }}>error</span>
+                      ) : synced ? (
+                        `synced ${timeSince(acc.lastSyncedAt!)}`
+                      ) : (
+                        <span className="badge b-wait" style={{ fontSize: 9, padding: "1px 6px" }}>not yet synced</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Status dot */}
+                  <div style={{
+                    width: 9, height: 9, borderRadius: "50%", flexShrink: 0,
+                    background: hasError ? "#dc2626" : synced ? "#16a34a" : "#d97706",
+                  }} />
+
+                  {/* Default label or Remove */}
+                  {acc.isEnvAccount ? (
+                    <span style={{ fontSize: 12, color: "var(--text3)", fontWeight: 500 }}>default</span>
+                  ) : (
+                    <button className="btn btn-sm btn-danger" onClick={() => removeAccount(acc)}>Remove</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Connect a new inbox */}
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>
+          Connect a new inbox
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginBottom: connectMode ? 16 : 0 }}>
+          <button
+            className="btn"
+            onClick={() => { setConnectMode(connectMode === "gmail" ? "" : "gmail"); setTestResult(null); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 8, padding: "10px 22px", fontSize: 13,
+              ...(connectMode === "gmail" ? { borderColor: "var(--accent)", background: "var(--accent-light)" } : {}),
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M2 6l10 7 10-7" stroke="#EA4335" strokeWidth="2" strokeLinecap="round"/>
+              <rect x="2" y="4" width="20" height="16" rx="2" stroke="#4285F4" strokeWidth="2" fill="none"/>
+            </svg>
+            Gmail
+          </button>
+
+          <button
+            className="btn"
+            onClick={() => connectOutlook(false)}
+            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 22px", fontSize: 13 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <rect x="2" y="4" width="20" height="16" rx="2" stroke="#0078D4" strokeWidth="2" fill="none"/>
+              <path d="M2 6l10 7 10-7" stroke="#0078D4" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            Outlook
+          </button>
+        </div>
+
+        {/* Gmail form */}
+        {connectMode === "gmail" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{
+              fontSize: 12, color: "var(--text3)", background: "var(--bg)", padding: "10px 14px",
+              borderRadius: 8, lineHeight: 1.5,
+            }}>
+              Use a Gmail App Password (not your account password). Enable it at myaccount.google.com → Security → 2-Step Verification → App passwords.
+            </div>
+            <input
+              type="email"
+              placeholder="your@email.com"
+              value={gmailForm.email}
+              onChange={(e) => setGmailForm({ ...gmailForm, email: e.target.value })}
+              style={inputStyle}
+            />
+            <input
+              type="password"
+              placeholder="App password"
+              value={gmailForm.password}
+              onChange={(e) => setGmailForm({ ...gmailForm, password: e.target.value })}
+              style={inputStyle}
+            />
+
+            {testResult && (
+              <div style={{
+                fontSize: 12, padding: "8px 12px", borderRadius: 8,
+                background: testResult.ok ? "#dcfce7" : "#fee2e2",
+                color: testResult.ok ? "#166534" : "#991b1b",
+              }}>
+                {testResult.message}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" onClick={testCredentials} disabled={!gmailForm.email || !gmailForm.password || testing}>
+                {testing ? "Testing..." : "Test Connection"}
+              </button>
+              <button className="btn btn-primary" onClick={saveGmail} disabled={!gmailForm.email || !gmailForm.password || saving}>
+                {saving ? "Saving..." : "Connect"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 const QUOTE_REQUIRED = ["Company", "Contact", "Email", "Commodity", "HS Code", "Tonnage", "Volume", "POL", "POD", "Container"];
@@ -59,6 +368,8 @@ export default function RfqInbox() {
   const [loading, setLoading] = useState(true);
   const [showReply, setShowReply] = useState(false);
   const [replyDraft, setReplyDraft] = useState("");
+  const [showEmailMonitor, setShowEmailMonitor] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     loadRfqs();
@@ -94,6 +405,18 @@ export default function RfqInbox() {
     setSelected(null);
   };
 
+  const generateQuote = async (rfqId: string) => {
+    setGenerating(true);
+    try {
+      const { data } = await api.post(`/quotes/generate/${rfqId}`);
+      window.location.href = `/quotes?id=${data._id}`;
+    } catch (err: any) {
+      alert(err.response?.data?.error || "Failed to generate quote");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   // Quote readiness score
   const getReadiness = (fields: { k: string; v: string; ok: boolean }[]) => {
     let filled = 0;
@@ -112,7 +435,7 @@ export default function RfqInbox() {
         <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Email Inbox</div>
           <div style={{ display: "flex", gap: 6 }}>
-            <button className="btn btn-sm" style={{ padding: "3px 6px", display: "flex", alignItems: "center", gap: 4 }} title="Inboxes">
+            <button className="btn btn-sm" style={{ padding: "3px 6px", display: "flex", alignItems: "center", gap: 4 }} title="Inboxes" onClick={() => setShowEmailMonitor(true)}>
               <Mail size={12} /> ...
             </button>
             <button className="btn btn-sm" style={{ padding: "3px 6px" }} onClick={loadRfqs} title="Sync">
@@ -340,6 +663,19 @@ export default function RfqInbox() {
                 placeholder="Add notes..."
                 style={{ width: "100%", minHeight: 50, padding: 8, fontSize: 11, border: "1px solid var(--border)", borderRadius: 6, fontFamily: "Inter, sans-serif", resize: "vertical", outline: "none", color: "var(--text)", background: "var(--bg)" }}
               />
+
+              {/* Generate Quote */}
+              <button
+                className="btn btn-primary"
+                onClick={() => generateQuote(selected._id)}
+                disabled={generating}
+                style={{
+                  width: "100%", marginTop: 16, padding: "10px 0", fontSize: 12,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                }}
+              >
+                {generating ? "Generating..." : "Generate Quote"}
+              </button>
             </div>
           </>
         ) : (
@@ -348,6 +684,9 @@ export default function RfqInbox() {
           </div>
         )}
       </div>
+
+      {/* Email Monitoring Modal */}
+      {showEmailMonitor && <EmailMonitoringModal onClose={() => setShowEmailMonitor(false)} />}
     </div>
   );
 }

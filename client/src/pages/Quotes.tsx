@@ -52,8 +52,17 @@ export default function Quotes() {
 
   useEffect(() => {
     api.get("/quotes").then((res) => {
-      setQuotes(res.data || []);
+      const data = res.data || [];
+      setQuotes(data);
       setLoading(false);
+      // Auto-select quote if ?id= param is present
+      const params = new URLSearchParams(window.location.search);
+      const targetId = params.get("id");
+      if (targetId) {
+        const match = data.find((q: Quote) => q._id === targetId);
+        if (match) setSelected(match);
+        window.history.replaceState({}, "", "/quotes");
+      }
     }).catch(() => setLoading(false));
   }, []);
 
