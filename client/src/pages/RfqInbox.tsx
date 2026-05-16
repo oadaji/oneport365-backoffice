@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Mail, RefreshCw, Archive, Trash2, X, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Mail, RefreshCw, Archive, Trash2, X } from "lucide-react";
 import api from "../lib/api";
 
 interface Rfq {
