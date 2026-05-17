@@ -8,26 +8,7 @@ const router = Router();
 router.get("/email-accounts", async (_req: Request, res: Response) => {
   try {
     const accounts = await EmailAccount.find().select("-password -refreshToken -accessToken").sort({ createdAt: 1 });
-
-    const result: any[] = [];
-
-    // Add env-var account if configured
-    if (process.env.GMAIL_ADDRESS) {
-      result.push({
-        id: "env",
-        label: "Primary Gmail",
-        email: process.env.GMAIL_ADDRESS,
-        provider: "gmail",
-        active: true,
-        isEnvAccount: true,
-        createdAt: new Date(0),
-      });
-    }
-
-    for (const acc of accounts) {
-      result.push({ ...acc.toObject(), isEnvAccount: false });
-    }
-
+    const result = accounts.map((acc) => ({ ...acc.toObject(), isEnvAccount: false }));
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: "Failed to load email accounts" });

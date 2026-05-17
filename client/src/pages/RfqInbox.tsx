@@ -26,7 +26,6 @@ interface EmailAccount {
   authType?: "password" | "oauth2";
   shared?: boolean;
   active: boolean;
-  isEnvAccount?: boolean;
   lastSyncedAt?: string;
   lastError?: string;
 }
@@ -65,7 +64,6 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
   useEffect(() => { fetchAccounts(); }, []);
 
   const removeAccount = async (acc: EmailAccount) => {
-    if (acc.isEnvAccount) return;
     const id = acc._id || acc.id;
     if (!window.confirm(`Remove ${acc.email}?`)) return;
     try {
@@ -232,11 +230,7 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
                   }} />
 
                   {/* Default label or Remove */}
-                  {acc.isEnvAccount ? (
-                    <span style={{ fontSize: 12, color: "var(--text3)", fontWeight: 500 }}>default</span>
-                  ) : (
-                    <button className="btn btn-sm btn-danger" onClick={() => removeAccount(acc)}>Remove</button>
-                  )}
+                  <button className="btn btn-sm btn-danger" onClick={() => removeAccount(acc)}>Remove</button>
                 </div>
               );
             })}

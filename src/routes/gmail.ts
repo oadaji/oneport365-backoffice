@@ -30,7 +30,6 @@ interface SyncAccount {
   user: string;
   pass: string;
   label: string;
-  isEnv: boolean;
   authType: "password" | "oauth2";
   accessToken?: string;
   refreshToken?: string;
@@ -40,22 +39,7 @@ interface SyncAccount {
 async function getAccountsToSync(): Promise<SyncAccount[]> {
   const accounts: SyncAccount[] = [];
 
-  // Env-var account
-  if (process.env.GMAIL_ADDRESS && process.env.GMAIL_APP_PASSWORD) {
-    accounts.push({
-      id: "env",
-      email: process.env.GMAIL_ADDRESS,
-      host: "imap.gmail.com",
-      port: 993,
-      user: process.env.GMAIL_ADDRESS,
-      pass: process.env.GMAIL_APP_PASSWORD,
-      label: "Primary Gmail",
-      isEnv: true,
-      authType: "password",
-    });
-  }
-
-  // DB accounts
+  // All accounts from DB (added via Email Monitoring UI)
   const dbAccounts = await EmailAccount.find({ active: true });
   for (const acc of dbAccounts) {
     if (accounts.some((a) => a.email === acc.email)) continue;
@@ -69,7 +53,6 @@ async function getAccountsToSync(): Promise<SyncAccount[]> {
       user: acc.email,
       pass: acc.password || "",
       label: acc.label || acc.email,
-      isEnv: false,
       authType: acc.authType || "password",
       accessToken: acc.accessToken,
       refreshToken: acc.refreshToken,
@@ -362,15 +345,11 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
       await client.logout();
 
       // Update last synced
-      if (!account.isEnv) {
-        await EmailAccount.findByIdAndUpdate(account.id, { lastSyncedAt: new Date(), lastError: null });
-      }
+      await EmailAccount.findByIdAndUpdate(account.id, { lastSyncedAt: new Date(), lastError: null });
     } catch (accErr: any) {
       const errMsg = `${account.label}: ${accErr.message}`;
       errors.push(errMsg);
-      if (!account.isEnv) {
-        await EmailAccount.findByIdAndUpdate(account.id, { lastError: accErr.message });
-      }
+      await EmailAccount.findByIdAndUpdate(account.id, { lastError: accErr.message });
     }
   }
 
@@ -401,43 +380,41 @@ router.get("/gmail/status", async (_req: Request, res: Response) => {
 router.post("/gmail/send", async (req: Request, res: Response) => {
   try {
     const { from, to, cc, subject, body } = req.body;
-    const fromEmail = from || process.env.GMAIL_ADDRESS;
+    if (!from) {
+      res.status(400).json({ error: "No sender email specified" });
+      return;
+    }
 
-    // Check if sender is an OAuth2 Outlook account
+    const dbAccount = await EmailAccount.findOne({ email: from, active: true });
+    if (!dbAccount) {
+      res.status(400).json({ error: "Sender account not found — add it via Email Monitoring first" });
+      return;
+    }
+
     let transporter: nodemailer.Transporter;
 
-    if (fromEmail) {
-      const dbAccount = await EmailAccount.findOne({ email: fromEmail, authType: "oauth2", provider: "outlook" });
-      if (dbAccount && dbAccount.refreshToken) {
-        // Outlook OAuth2 SMTP
-        const token = await getValidToken(dbAccount);
-        transporter = nodemailer.createTransport({
-          host: "smtp.office365.com",
-          port: 587,
-          secure: false,
-          auth: {
-            type: "OAuth2",
-            user: fromEmail,
-            accessToken: token,
-          },
-        } as any);
-      } else {
-        // Gmail app password
-        const fromPass = process.env.GMAIL_APP_PASSWORD;
-        if (!fromPass) {
-          res.status(400).json({ error: "No email credentials configured for this sender" });
-          return;
-        }
-        transporter = nodemailer.createTransport({
-          host: "smtp.gmail.com",
-          port: 465,
-          secure: true,
-          auth: { user: fromEmail, pass: fromPass },
-        });
-      }
+    if (dbAccount.authType === "oauth2" && dbAccount.refreshToken) {
+      // Outlook OAuth2 SMTP
+      const token = await getValidToken(dbAccount);
+      transporter = nodemailer.createTransport({
+        host: "smtp.office365.com",
+        port: 587,
+        secure: false,
+        auth: {
+          type: "OAuth2",
+          user: from,
+          accessToken: token,
+        },
+      } as any);
     } else {
-      res.status(400).json({ error: "No sender email configured" });
-      return;
+      // Gmail / IMAP app password SMTP
+      const isOutlook = dbAccount.provider === "outlook";
+      transporter = nodemailer.createTransport({
+        host: isOutlook ? "smtp.office365.com" : "smtp.gmail.com",
+        port: isOutlook ? 587 : 465,
+        secure: !isOutlook,
+        auth: { user: from, pass: dbAccount.password },
+      });
     }
 
     await transporter.sendMail({
