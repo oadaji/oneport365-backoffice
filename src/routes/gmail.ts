@@ -113,7 +113,7 @@ function createImapClient(account: SyncAccount): ImapFlow {
 
 // POST /api/gmail/sync — sync all configured inboxes
 router.post("/gmail/sync", async (req: Request, res: Response) => {
-  const maxResults = 20;
+  const maxResults = 500;
   const accounts = await getAccountsToSync();
 
   if (!accounts.length) {
