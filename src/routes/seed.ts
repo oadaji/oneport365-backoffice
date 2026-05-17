@@ -9,6 +9,30 @@ import { OceanFreightRate, HaulageImportRate, OtherCharge } from "../models/rate
 
 const router = Router();
 
+// POST /api/clear — wipe all synced data (CRM, emails, RFQs, quotes)
+router.post("/clear", async (_req: Request, res: Response) => {
+  try {
+    const [companies, contacts, emails, rfqs, quotes] = await Promise.all([
+      Company.deleteMany({}),
+      Contact.deleteMany({}),
+      Email.deleteMany({}),
+      Rfq.deleteMany({}),
+      Quote.deleteMany({}),
+    ]);
+    res.json({
+      cleared: {
+        companies: companies.deletedCount,
+        contacts: contacts.deletedCount,
+        emails: emails.deletedCount,
+        rfqs: rfqs.deletedCount,
+        quotes: quotes.deletedCount,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to clear data" });
+  }
+});
+
 router.post("/seed", async (_req: Request, res: Response) => {
   try {
     // ── Companies ──────────────────────────────────────────────
