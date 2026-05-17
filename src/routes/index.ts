@@ -11,6 +11,8 @@ import { seedRouter } from "./seed";
 import { gmailRouter } from "./gmail";
 import { emailAccountsRouter } from "./email-accounts";
 import { microsoftAuthRouter } from "./microsoft-auth";
+import { googleAuthRouter } from "./google-auth";
+import { emailSyncRouter } from "./email-sync";
 
 const router = Router();
 
@@ -26,5 +28,7 @@ router.use(seedRouter);
 router.use(gmailRouter);
 router.use(emailAccountsRouter);
 router.use(microsoftAuthRouter);
+router.use(googleAuthRouter);
+router.use(emailSyncRouter);
 
 export default router;

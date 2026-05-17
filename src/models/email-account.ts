@@ -15,6 +15,7 @@ export interface IEmailAccount extends Document {
   refreshToken?: string;
   accessToken?: string;
   tokenExpiresAt?: Date;
+  cursor?: string; // gmail: lastHistoryId | outlook: deltaLink
   createdAt: Date;
 }
 
@@ -34,6 +35,7 @@ const emailAccountSchema = new Schema<IEmailAccount>(
     refreshToken: String,
     accessToken: String,
     tokenExpiresAt: Date,
+    cursor: String,
   },
   { timestamps: true }
 );
