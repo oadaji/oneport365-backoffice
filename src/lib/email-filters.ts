@@ -6,6 +6,29 @@ const AUTOMATED_ADDRESS_PATTERNS = [
   /^info@accounts\./i, /@accounts\.google\.com$/i,
   /@notifications\./i,
   /@mail\.(linkedin|facebook|twitter|instagram|tiktok|amazon|ebay|paypal)\.com$/i,
+  /^hello@send\./i, /^hello@e\./i, /^hello@email\./i,
+  /^hello@newsletters?\./i, /^hello@promo\./i,
+];
+
+// Domains that send promotional/retail emails — not freight
+const BLOCKED_SENDER_DOMAINS = [
+  "gap.com", "gapfactory.com", "oldnavy.com", "bananarepublic.com",
+  "waterdrop.com", "amazon.com", "ebay.com", "etsy.com",
+  "shopify.com", "aliexpress.com", "alibaba.com",
+  "netflix.com", "spotify.com", "apple.com", "google.com",
+  "facebook.com", "instagram.com", "twitter.com", "linkedin.com",
+  "tiktok.com", "youtube.com", "reddit.com",
+  "uber.com", "lyft.com", "doordash.com", "grubhub.com",
+  "walmart.com", "target.com", "bestbuy.com", "costco.com",
+  "nike.com", "adidas.com", "zara.com", "hm.com",
+  "sephora.com", "ulta.com", "macys.com", "nordstrom.com",
+  "airbnb.com", "booking.com", "expedia.com", "hotels.com",
+  "slack.com", "zoom.us", "dropbox.com", "notion.so",
+  "mailchimp.com", "sendgrid.net", "constantcontact.com",
+  "hubspot.com", "salesforce.com", "zendesk.com",
+  "stripe.com", "paypal.com", "squarespace.com", "wix.com",
+  "canva.com", "figma.com", "github.com", "gitlab.com",
+  "medium.com", "substack.com",
 ];
 
 const AUTOMATED_SUBJECT_PATTERNS = [
@@ -18,6 +41,13 @@ const AUTOMATED_SUBJECT_PATTERNS = [
   /appointment (confirmed|reminder|booked)/i,
   /booking confirmation/i,
   /thank you for your (order|purchase)/i,
+  /% off/i, /clearance/i, /flash sale/i, /limited time/i,
+  /free shipping.*(?:ends|today|last chance)/i,
+  /use your (?:email )?exclusives?/i,
+  /extra \d+% off/i, /don't miss/i, /your bonus/i,
+  /shop now/i, /shop the/i, /new arrivals/i,
+  /mother'?s day/i, /father'?s day/i, /valentine/i, /black friday/i,
+  /gift (?:ideas|guide|card)/i,
 ];
 
 export function isAutomatedEmail(email: {
@@ -28,6 +58,16 @@ export function isAutomatedEmail(email: {
   if (email.headers?.["list-unsubscribe"]) return true;
   if (AUTOMATED_ADDRESS_PATTERNS.some((p) => p.test(email.fromEmail))) return true;
   if (AUTOMATED_SUBJECT_PATTERNS.some((p) => p.test(email.subject))) return true;
+
+  // Block known retail/promo sender domains
+  const domain = email.fromEmail.split("@")[1]?.toLowerCase() || "";
+  // Check exact domain and parent domain (e.g. send.waterdrop.com → waterdrop.com)
+  const parts = domain.split(".");
+  for (let i = 0; i < parts.length - 1; i++) {
+    const checkDomain = parts.slice(i).join(".");
+    if (BLOCKED_SENDER_DOMAINS.includes(checkDomain)) return true;
+  }
+
   return false;
 }
 
