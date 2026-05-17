@@ -1,13 +1,12 @@
 import mongoose from "mongoose";
-import dotenv from "dotenv";
 import app from "./app";
 
-dotenv.config({ override: false });
-
+// In development, run: node -r dotenv/config dist/server.js
 const PORT = process.env.PORT || 5001;
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/oneport365";
 
-console.log("MONGODB_URI:", MONGODB_URI.replace(/\/\/.*@/, "//*****@"));
+console.log("PORT:", PORT);
+console.log("MONGODB_URI:", MONGODB_URI.substring(0, 30) + "...");
 
 async function start() {
   try {
