@@ -35,6 +35,27 @@ const AUTOMATED_SUBJECT_PATTERNS = [
   /thank you for your (order|purchase)/i,
 ];
 
+// Sender domains that are never freight-related
+const BLOCKED_SENDER_DOMAINS = [
+  "gapfactory.com", "gap.com", "oldnavy.com", "bananarepublic.com",
+  "waterdrop.com", "poshmark.com", "quip.com", "budgettravel.com",
+  "nba.com", "warriors.com",
+  "amazon.com", "ebay.com", "etsy.com", "shopify.com",
+  "aliexpress.com", "netflix.com", "spotify.com", "apple.com",
+  "facebook.com", "instagram.com", "twitter.com", "linkedin.com",
+  "tiktok.com", "youtube.com", "reddit.com", "medium.com",
+  "uber.com", "lyft.com", "doordash.com", "grubhub.com",
+  "walmart.com", "target.com", "bestbuy.com", "costco.com",
+  "nike.com", "adidas.com", "zara.com", "hm.com",
+  "sephora.com", "macys.com", "nordstrom.com",
+  "airbnb.com", "booking.com", "expedia.com",
+  "slack.com", "zoom.us", "dropbox.com", "notion.so",
+  "mailchimp.com", "sendgrid.net", "hubspot.com",
+  "stripe.com", "paypal.com", "squarespace.com", "wix.com",
+  "canva.com", "figma.com", "github.com", "substack.com",
+  "bordfrancais.com", "bordier.com",
+];
+
 export function isAutomatedEmail(email: {
   fromEmail: string;
   subject: string;
@@ -43,6 +64,14 @@ export function isAutomatedEmail(email: {
   if (email.hasListUnsubscribe) return true;
   if (AUTOMATED_ADDRESS_PATTERNS.some((p) => p.test(email.fromEmail))) return true;
   if (AUTOMATED_SUBJECT_PATTERNS.some((p) => p.test(email.subject))) return true;
+
+  // Block known non-freight sender domains (check parent domains too)
+  const domain = email.fromEmail.split("@")[1]?.toLowerCase() || "";
+  const parts = domain.split(".");
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (BLOCKED_SENDER_DOMAINS.includes(parts.slice(i).join("."))) return true;
+  }
+
   return false;
 }
 

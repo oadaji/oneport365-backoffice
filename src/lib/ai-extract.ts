@@ -92,8 +92,12 @@ Rules:
 - If not a customer-rfq, return empty shipments array`;
 
   try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error("ANTHROPIC_API_KEY not set");
+    }
+
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-4-6-20250514",
       max_tokens: 2000,
       messages: [{ role: "user", content: prompt }],
     });
@@ -107,8 +111,8 @@ Rules:
       combinedDraft: parsed.combinedDraft || null,
       detectedEmailType: parsed.detectedEmailType,
     };
-  } catch (err) {
-    console.error("Claude extraction failed:", err);
+  } catch (err: any) {
+    console.error("Claude extraction failed:", err?.message || err);
     return {
       shipments: [{
         label: "Extraction failed",
