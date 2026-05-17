@@ -177,17 +177,13 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
             // Build unique UID
             const uid = messageId ? `mid:${messageId}` : `${account.email}:${msg.seq}`;
 
-            // Skip automated emails
+            // Skip automated emails (noreply, newsletters etc)
             if (isAutomatedEmail({ fromEmail, subject, headers: parsed.headers as any })) {
               totalSkipped++;
               continue;
             }
 
-            // Skip non-freight emails before any DB writes
-            if (!looksLikeFreight({ subject, body: typeof body === "string" ? body : "" })) {
-              totalSkipped++;
-              continue;
-            }
+            // IMAP SEARCH already filtered for shipping keywords — no need for looksLikeFreight here
 
             // Check if already ingested
             const existing = await Email.findOne({ uid });
@@ -284,35 +280,21 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
               }
             }
 
-            // Pre-classify before Claude
-            const preClass = preClassifyEmail({ fromName, fromEmail, subject, body: typeof body === "string" ? body : "" });
-            if (preClass && preClass !== "customer-rfq" && preClass !== "internal-rfq") {
-              totalSkipped++;
-              continue;
-            }
-
-            // Claude extraction
+            // Claude extraction — process all shipping emails that passed IMAP search
             const extraction = await extractWithClaude(
               { fromName, fromEmail, subject, body: typeof body === "string" ? body : "" },
               "customer-rfq"
             );
 
             const resolvedType = extraction.detectedEmailType || "customer-rfq";
-            if (resolvedType !== "customer-rfq" && resolvedType !== "internal-rfq") {
+
+            // Skip only outbound emails (sent BY OnePort)
+            if (resolvedType === "outbound") {
               totalSkipped++;
               continue;
             }
 
-            // Check freight match — only proceed if POL or POD found
-            const hasRoute = extraction.shipments.some((s) =>
-              s.fields.some((f) => (f.k === "POL" || f.k === "POD") && f.ok)
-            );
-            if (!hasRoute) {
-              totalSkipped++;
-              continue;
-            }
-
-            // Confirmed freight RFQ — now create CRM contact and email record
+            // Create CRM contact and email record for all shipping-related emails
             const crm = await resolveContact({
               email: fromEmail,
               name: fromName,
