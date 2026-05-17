@@ -177,8 +177,9 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
             // Build unique UID
             const uid = messageId ? `mid:${messageId}` : `${account.email}:${msg.seq}`;
 
-            // Skip automated emails (noreply, newsletters etc)
-            if (isAutomatedEmail({ fromEmail, subject, headers: parsed.headers as any })) {
+            // Skip automated/promotional emails
+            const hasListUnsub = parsed.headers?.has("list-unsubscribe") || false;
+            if (isAutomatedEmail({ fromEmail, subject, hasListUnsubscribe: hasListUnsub })) {
               totalSkipped++;
               continue;
             }

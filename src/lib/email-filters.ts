@@ -38,10 +38,9 @@ const AUTOMATED_SUBJECT_PATTERNS = [
 export function isAutomatedEmail(email: {
   fromEmail: string;
   subject: string;
-  headers?: Record<string, string>;
+  hasListUnsubscribe?: boolean;
 }): boolean {
-  const hasListUnsubscribe = !!email.headers?.["list-unsubscribe"];
-  if (hasListUnsubscribe) return true;
+  if (email.hasListUnsubscribe) return true;
   if (AUTOMATED_ADDRESS_PATTERNS.some((p) => p.test(email.fromEmail))) return true;
   if (AUTOMATED_SUBJECT_PATTERNS.some((p) => p.test(email.subject))) return true;
   return false;
