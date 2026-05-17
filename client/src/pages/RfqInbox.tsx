@@ -115,17 +115,6 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
     window.location.href = `${baseUrl}/auth/microsoft${shared ? "?shared=true" : ""}`;
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "10px 14px",
-    fontSize: 13,
-    border: "1px solid var(--border2)",
-    borderRadius: 8,
-    fontFamily: "Inter, sans-serif",
-    outline: "none",
-    color: "var(--text)",
-  };
-
   return (
     <div
       style={{
