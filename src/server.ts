@@ -2,13 +2,12 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import app from "./app";
 
-// Only load .env file in development — in production Railway injects env vars directly
-if (!process.env.RAILWAY_ENVIRONMENT) {
-  dotenv.config();
-}
+dotenv.config({ override: false });
 
 const PORT = process.env.PORT || 5001;
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/oneport365";
+
+console.log("MONGODB_URI:", MONGODB_URI.replace(/\/\/.*@/, "//*****@"));
 
 async function start() {
   try {
