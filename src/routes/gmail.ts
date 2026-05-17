@@ -134,14 +134,44 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
 
       const lock = await client.getMailboxLock("INBOX");
       try {
-        const status = await client.status("INBOX", { messages: true });
-        const total = status.messages || 0;
-        if (total === 0) continue;
+        // IMAP SEARCH — server-side filter for shipping emails only
+        // Search for emails from the last 60 days with shipping-related keywords
+        const sinceDate = new Date(Date.now() - 60 * 86400_000);
+        const sinceStr = sinceDate.toISOString().slice(0, 10).replace(/-/g, "-");
 
-        const startUid = Math.max(1, total - maxResults + 1);
-        const range = `${startUid}:${total}`;
+        // IMAP OR search for shipping keywords in subject
+        const shippingUids = await client.search({
+          since: sinceDate,
+          or: [
+            { subject: "RFQ" },
+            { subject: "quote" },
+            { subject: "freight" },
+            { subject: "shipment" },
+            { subject: "shipping" },
+            { subject: "container" },
+            { subject: "FCL" },
+            { subject: "LCL" },
+            { subject: "booking" },
+            { subject: "rates" },
+            { subject: "EXW" },
+            { subject: "FOB" },
+            { subject: "CIF" },
+            { subject: "bill of lading" },
+            { subject: "BOL" },
+            { subject: "quotation" },
+            { subject: "ETA" },
+            { subject: "ETD" },
+            { subject: "DAP" },
+          ],
+        }, { uid: true });
 
-        for await (const msg of client.fetch(range, { envelope: true, source: true, internalDate: true })) {
+        if (!shippingUids || shippingUids.length === 0) continue;
+
+        // Cap at maxResults most recent
+        const uidsToFetch = shippingUids.slice(-maxResults);
+        const uidRange = uidsToFetch.join(",");
+
+        for await (const msg of client.fetch(uidRange, { envelope: true, source: true, internalDate: true }, { uid: true })) {
           try {
             const source = msg.source;
             if (!source) continue;

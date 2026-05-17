@@ -44,6 +44,11 @@ function timeSince(dateStr: string): string {
 function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
   const [accounts, setAccounts] = useState<EmailAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [connectMode, setConnectMode] = useState<"" | "gmail">("");
+  const [gmailForm, setGmailForm] = useState({ email: "", password: "" });
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const fetchAccounts = async () => {
     try {
@@ -69,9 +74,40 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const connectGmail = () => {
-    const baseUrl = process.env.REACT_APP_API_URL || "http://localhost:5001/api";
-    window.location.href = `${baseUrl}/auth/google`;
+  const testCredentials = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const { data } = await api.post("/email-accounts/test-credentials", {
+        email: gmailForm.email,
+        password: gmailForm.password,
+      });
+      setTestResult(data);
+    } catch {
+      setTestResult({ ok: false, message: "Connection failed" });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const saveGmail = async () => {
+    setSaving(true);
+    try {
+      await api.post("/email-accounts", {
+        email: gmailForm.email,
+        password: gmailForm.password,
+        label: gmailForm.email,
+        provider: "gmail",
+      });
+      setGmailForm({ email: "", password: "" });
+      setConnectMode("");
+      setTestResult(null);
+      await fetchAccounts();
+    } catch (err: any) {
+      setTestResult({ ok: false, message: err.response?.data?.error || "Failed to save" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const connectOutlook = (shared = false) => {
@@ -200,14 +236,17 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
           Connect a new inbox
         </div>
 
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: connectMode ? 16 : 0 }}>
           <button
             className="btn"
-            onClick={connectGmail}
-            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 22px", fontSize: 13 }}
+            onClick={() => { setConnectMode(connectMode === "gmail" ? "" : "gmail"); setTestResult(null); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 8, padding: "10px 22px", fontSize: 13,
+              ...(connectMode === "gmail" ? { borderColor: "var(--accent)", background: "var(--accent-light)" } : {}),
+            }}
           >
             <img src="https://www.gstatic.com/images/branding/product/1x/gmail_2020q4_20dp.png" alt="Gmail" width="20" height="20" style={{ objectFit: "contain" }} />
-            Connect Gmail
+            Gmail
           </button>
 
           <button
@@ -216,12 +255,54 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
             style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 22px", fontSize: 13 }}
           >
             <img src="https://img.icons8.com/color/48/microsoft-outlook-2019--v2.png" alt="Outlook" width="20" height="20" style={{ objectFit: "contain" }} />
-            Connect Outlook
+            Outlook
           </button>
         </div>
 
+        {connectMode === "gmail" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{
+              fontSize: 12, color: "var(--text3)", background: "var(--bg)", padding: "10px 14px",
+              borderRadius: 8, lineHeight: 1.5,
+            }}>
+              Use a Gmail App Password (not your account password). Enable it at myaccount.google.com &rarr; Security &rarr; 2-Step Verification &rarr; App passwords.
+            </div>
+            <input
+              type="email"
+              placeholder="your@email.com"
+              value={gmailForm.email}
+              onChange={(e) => setGmailForm({ ...gmailForm, email: e.target.value })}
+              style={{ width: "100%", padding: "10px 14px", fontSize: 13, border: "1px solid var(--border2)", borderRadius: 8, fontFamily: "Inter, sans-serif", outline: "none", color: "var(--text)" }}
+            />
+            <input
+              type="password"
+              placeholder="App password (no spaces)"
+              value={gmailForm.password}
+              onChange={(e) => setGmailForm({ ...gmailForm, password: e.target.value })}
+              style={{ width: "100%", padding: "10px 14px", fontSize: 13, border: "1px solid var(--border2)", borderRadius: 8, fontFamily: "Inter, sans-serif", outline: "none", color: "var(--text)" }}
+            />
+            {testResult && (
+              <div style={{
+                fontSize: 12, padding: "8px 12px", borderRadius: 8,
+                background: testResult.ok ? "#dcfce7" : "#fee2e2",
+                color: testResult.ok ? "#166534" : "#991b1b",
+              }}>
+                {testResult.message}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" onClick={testCredentials} disabled={!gmailForm.email || !gmailForm.password || testing}>
+                {testing ? "Testing..." : "Test Connection"}
+              </button>
+              <button className="btn btn-primary" onClick={saveGmail} disabled={!gmailForm.email || !gmailForm.password || saving}>
+                {saving ? "Saving..." : "Connect"}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 10, lineHeight: 1.5 }}>
-          Sign in with your Google or Microsoft account. Only shipping-related emails are synced — personal emails are never accessed.
+          Only shipping-related emails are synced — personal emails are never accessed.
         </div>
       </div>
     </div>
@@ -291,7 +372,7 @@ export default function RfqInbox() {
   const syncEmails = async () => {
     setSyncing(true);
     try {
-      await api.post("/emails/sync");
+      await api.post("/gmail/sync");
     } catch (err) {
       console.error("Sync failed", err);
     } finally {
