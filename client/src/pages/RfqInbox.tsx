@@ -192,14 +192,20 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
                     border: `1px solid ${acc.provider === "outlook" ? "#bdd4f7" : "#fecaca"}`,
                   }}>
                     {acc.provider === "outlook" ? (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                        <rect x="2" y="4" width="20" height="16" rx="2" stroke="#0078D4" strokeWidth="2" fill="none"/>
-                        <path d="M2 6l10 7 10-7" stroke="#0078D4" strokeWidth="2" strokeLinecap="round"/>
+                      <svg width="20" height="20" viewBox="0 0 48 48">
+                        <path fill="#1976D2" d="M28 13H14v22h14c1.1 0 2-.9 2-2V15c0-1.1-.9-2-2-2z"/>
+                        <path fill="#2196F3" d="M28 13H44v22H28z"/>
+                        <path fill="#0D47A1" d="M14 13L2 17v14l12 4z"/>
+                        <path fill="#1565C0" d="M14 13v22L2 31V17z"/>
+                        <ellipse fill="#fff" cx="9" cy="24" rx="4.5" ry="5.5"/>
+                        <path fill="#E3F2FD" d="M30 20h10v2H30zm0 4h10v2H30zm0 4h8v2h-8z"/>
                       </svg>
                     ) : (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                        <path d="M2 6l10 7 10-7" stroke="#EA4335" strokeWidth="2" strokeLinecap="round"/>
-                        <rect x="2" y="4" width="20" height="16" rx="2" stroke="#4285F4" strokeWidth="2" fill="none"/>
+                      <svg width="20" height="20" viewBox="0 0 48 48">
+                        <path fill="#4285F4" d="M44 12H4c-1.1 0-2 .9-2 2v20c0 1.1.9 2 2 2h40c1.1 0 2-.9 2-2V14c0-1.1-.9-2-2-2z"/>
+                        <path fill="#34A853" d="M2 14l22 13 22-13v2L24 29 2 16z"/>
+                        <path fill="#FBBC05" d="M2 14l22 13L2 16z"/>
+                        <path fill="#EA4335" d="M46 14L24 27 2 14c0-1.1.9-2 2-2h40c1.1 0 2 .9 2 2z"/>
                       </svg>
                     )}
                   </div>
@@ -251,9 +257,11 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
               ...(connectMode === "gmail" ? { borderColor: "var(--accent)", background: "var(--accent-light)" } : {}),
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M2 6l10 7 10-7" stroke="#EA4335" strokeWidth="2" strokeLinecap="round"/>
-              <rect x="2" y="4" width="20" height="16" rx="2" stroke="#4285F4" strokeWidth="2" fill="none"/>
+            <svg width="18" height="18" viewBox="0 0 48 48">
+              <path fill="#4285F4" d="M44 12H4c-1.1 0-2 .9-2 2v20c0 1.1.9 2 2 2h40c1.1 0 2-.9 2-2V14c0-1.1-.9-2-2-2z"/>
+              <path fill="#34A853" d="M2 14l22 13 22-13v2L24 29 2 16z"/>
+              <path fill="#FBBC05" d="M2 14l22 13L2 16z"/>
+              <path fill="#EA4335" d="M46 14L24 27 2 14c0-1.1.9-2 2-2h40c1.1 0 2 .9 2 2z"/>
             </svg>
             Gmail
           </button>
@@ -263,9 +271,13 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
             onClick={() => connectOutlook(false)}
             style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 22px", fontSize: 13 }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <rect x="2" y="4" width="20" height="16" rx="2" stroke="#0078D4" strokeWidth="2" fill="none"/>
-              <path d="M2 6l10 7 10-7" stroke="#0078D4" strokeWidth="2" strokeLinecap="round"/>
+            <svg width="18" height="18" viewBox="0 0 48 48">
+              <path fill="#1976D2" d="M28 13H14v22h14c1.1 0 2-.9 2-2V15c0-1.1-.9-2-2-2z"/>
+              <path fill="#2196F3" d="M28 13H44v22H28z"/>
+              <path fill="#0D47A1" d="M14 13L2 17v14l12 4z"/>
+              <path fill="#1565C0" d="M14 13v22L2 31V17z"/>
+              <ellipse fill="#fff" cx="9" cy="24" rx="4.5" ry="5.5"/>
+              <path fill="#E3F2FD" d="M30 20h10v2H30zm0 4h10v2H30zm0 4h8v2h-8z"/>
             </svg>
             Outlook
           </button>
