@@ -7,7 +7,7 @@ import nodemailer from "nodemailer";
 import { Email } from "../models/email";
 import { EmailAccount } from "../models/email-account";
 import { Rfq } from "../models/rfq";
-import { isAutomatedEmail, normaliseMessageId, looksLikeFreight } from "../lib/email-filters";
+import { isAutomatedEmail, normaliseMessageId } from "../lib/email-filters";
 import { extractWithClaude, preClassifyEmail } from "../lib/ai-extract";
 import { resolveContact } from "../lib/resolve-contact";
 import { getValidToken, refreshAccessToken } from "../lib/microsoft-oauth";
