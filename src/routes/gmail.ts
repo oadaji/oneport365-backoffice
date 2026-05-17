@@ -7,7 +7,7 @@ import nodemailer from "nodemailer";
 import { Email } from "../models/email";
 import { EmailAccount } from "../models/email-account";
 import { Rfq } from "../models/rfq";
-import { isAutomatedEmail, normaliseMessageId } from "../lib/email-filters";
+import { isAutomatedEmail, normaliseMessageId, looksLikeFreight } from "../lib/email-filters";
 import { extractWithClaude, preClassifyEmail } from "../lib/ai-extract";
 import { resolveContact } from "../lib/resolve-contact";
 import { getValidToken, refreshAccessToken } from "../lib/microsoft-oauth";
@@ -167,6 +167,12 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
               continue;
             }
 
+            // Skip non-freight emails before any DB writes
+            if (!looksLikeFreight({ subject, body: typeof body === "string" ? body : "" })) {
+              totalSkipped++;
+              continue;
+            }
+
             // Check if already ingested
             const existing = await Email.findOne({ uid });
             if (existing) {
@@ -262,28 +268,10 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
               }
             }
 
-            // New email — resolve contact & ingest
-            const crm = await resolveContact({
-              email: fromEmail,
-              name: fromName,
-              source: "email",
-            });
-
-            const emailDoc = await Email.create({
-              uid, fromName, fromEmail, subject,
-              body: typeof body === "string" ? body : "",
-              emailType: "customer-rfq",
-              receivedAt: parsed.date || new Date(),
-              messageId, cc,
-              receivedInbox: account.label,
-              contactId: crm.contactId,
-            });
-
             // Pre-classify before Claude
             const preClass = preClassifyEmail({ fromName, fromEmail, subject, body: typeof body === "string" ? body : "" });
             if (preClass && preClass !== "customer-rfq" && preClass !== "internal-rfq") {
-              await Email.findByIdAndUpdate(emailDoc._id, { emailType: preClass });
-              totalSynced++;
+              totalSkipped++;
               continue;
             }
 
@@ -295,20 +283,35 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
 
             const resolvedType = extraction.detectedEmailType || "customer-rfq";
             if (resolvedType !== "customer-rfq" && resolvedType !== "internal-rfq") {
-              await Email.findByIdAndUpdate(emailDoc._id, { emailType: resolvedType });
-              totalSynced++;
+              totalSkipped++;
               continue;
             }
 
-            // Check freight match
+            // Check freight match — only proceed if POL or POD found
             const hasRoute = extraction.shipments.some((s) =>
               s.fields.some((f) => (f.k === "POL" || f.k === "POD") && f.ok)
             );
             if (!hasRoute) {
-              await Email.findByIdAndUpdate(emailDoc._id, { emailType: "rejected" });
               totalSkipped++;
               continue;
             }
+
+            // Confirmed freight RFQ — now create CRM contact and email record
+            const crm = await resolveContact({
+              email: fromEmail,
+              name: fromName,
+              source: "email",
+            });
+
+            const emailDoc = await Email.create({
+              uid, fromName, fromEmail, subject,
+              body: typeof body === "string" ? body : "",
+              emailType: resolvedType,
+              receivedAt: parsed.date || new Date(),
+              messageId, cc,
+              receivedInbox: account.label,
+              contactId: crm.contactId,
+            });
 
             // Create RFQs
             const isGroup = extraction.shipments.length > 1;
