@@ -70,3 +70,9 @@ body {
 .b-wait { background: #fef3c7; color: #92400e; }
 .b-rate { background: #dbeafe; color: #1e40af; }
 .b-gray { background: #f3f4f6; color: #4b5563; }
+
+/* Animations */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

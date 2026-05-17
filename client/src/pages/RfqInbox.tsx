@@ -352,6 +352,7 @@ export default function RfqInbox() {
   const [replyDraft, setReplyDraft] = useState("");
   const [showEmailMonitor, setShowEmailMonitor] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     loadRfqs();
@@ -365,6 +366,18 @@ export default function RfqInbox() {
       setRfqs(filtered);
       setLoading(false);
     }).catch(() => setLoading(false));
+  };
+
+  const syncEmails = async () => {
+    setSyncing(true);
+    try {
+      await api.post("/gmail/sync");
+    } catch (err) {
+      console.error("Sync failed", err);
+    } finally {
+      setSyncing(false);
+      loadRfqs();
+    }
   };
 
   const selectRfq = (r: Rfq) => {
@@ -420,8 +433,14 @@ export default function RfqInbox() {
             <button className="btn btn-sm" style={{ padding: "3px 6px", display: "flex", alignItems: "center", gap: 4 }} title="Inboxes" onClick={() => setShowEmailMonitor(true)}>
               <Mail size={12} /> ...
             </button>
-            <button className="btn btn-sm" style={{ padding: "3px 6px" }} onClick={loadRfqs} title="Sync">
-              <RefreshCw size={12} />
+            <button
+              className="btn btn-sm"
+              style={{ padding: "3px 6px" }}
+              onClick={syncEmails}
+              disabled={syncing}
+              title={syncing ? "Syncing emails..." : "Sync emails"}
+            >
+              <RefreshCw size={12} style={syncing ? { animation: "spin 1s linear infinite" } : undefined} />
             </button>
           </div>
         </div>
