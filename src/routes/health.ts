@@ -9,6 +9,7 @@ router.get("/health", (_req: Request, res: Response) => {
     status: "ok",
     db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
     uptime: process.uptime(),
+    envKeys: Object.keys(process.env).filter(k => k.includes("ANTHROPIC") || k.includes("MONGO") || k.includes("PORT") || k.includes("RAILWAY")),
   });
 });
 
