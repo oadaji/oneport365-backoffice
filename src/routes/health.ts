@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import mongoose from "mongoose";
+import Anthropic from "@anthropic-ai/sdk";
 
 const router = Router();
 
@@ -9,6 +10,29 @@ router.get("/health", (_req: Request, res: Response) => {
     db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
     uptime: process.uptime(),
   });
+});
+
+// GET /api/health/claude — test Claude API connection
+router.get("/health/claude", async (_req: Request, res: Response) => {
+  try {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) {
+      res.json({ ok: false, error: "ANTHROPIC_API_KEY not set" });
+      return;
+    }
+
+    const anthropic = new Anthropic({ apiKey: key });
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-5-20241022",
+      max_tokens: 20,
+      messages: [{ role: "user", content: "Say OK" }],
+    });
+
+    const text = (response.content[0] as any).text || "";
+    res.json({ ok: true, response: text, model: response.model });
+  } catch (err: any) {
+    res.json({ ok: false, error: err.message, type: err.constructor.name });
+  }
 });
 
 export { router as healthRouter };
