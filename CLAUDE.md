@@ -263,6 +263,162 @@ If From address ends in @oneport365.com, scan the body for the original external
 
 ---
 
+## @oneport365.com internal domain rule (THREE LAYERS)
+
+Any address ending `@oneport365.com` is a team member — NEVER a customer. Enforced in three layers:
+
+### Layer 1: Server — extractForwardedSender() in gmail.ts
+
+During IMAP sync, before calling `/api/rfq/ingest`, if sender is `@oneport365.com`:
+- Scan body for original external sender using patterns:
+  - `From: Name <external@domain.com>` (standard)
+  - `From: Name [mailto:external@domain.com]` (Outlook classic)
+- Replace `fromName`/`fromEmail` with the external customer
+- If no external sender found, keep the internal address but Claude will handle it
+
+### Layer 2: Server — Claude prompt INTERNAL FORWARD RULE
+
+Embedded in `extractWithClaude()` prompt:
+> "If the From address ends in @oneport365.com, the email was forwarded by an internal team member. Scan the body for the original external sender. Set Customer to that name, derive Company from their signature or email domain, set Email to the external address. Classify as customer-rfq (not internal-rfq) if the body contains a forwarded customer enquiry."
+
+### Layer 3: Client — effectiveSender() in RfqInbox.tsx
+
+```typescript
+function isInternalAddr(email: string): boolean {
+  return email?.toLowerCase().endsWith("@oneport365.com");
+}
+
+function effectiveSender(rfq: Rfq): { name: string; email: string } {
+  const em = rfq.email;
+  if (!em) return { name: "Unknown", email: "" };
+  if (isInternalAddr(em.fromEmail)) {
+    const bodyMatch = em.body?.match(
+      /From:\s*([^<\n\r]+?)\s*<([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>/i
+    );
+    if (bodyMatch) {
+      const extEmail = bodyMatch[2].toLowerCase();
+      if (!isInternalAddr(extEmail))
+        return { name: bodyMatch[1].trim(), email: extEmail };
+    }
+  }
+  return { name: em.fromName || em.fromEmail, email: em.fromEmail };
+}
+```
+
+Used in: inbox sender display, email header, compose tray To field, Quote Readiness Contact+Email auto-fill.
+
+**If any layer is missing, the UI shows @oneport365.com as "customer".**
+
+---
+
+## Volume field rules
+
+Claude must follow these rules for the Volume field:
+- **Ocean FCL:** Volume = container count ("2", "3"). NEVER ask for CBM on FCL shipments.
+- **Ocean LCL:** Volume = CBM or dimensions.
+- **Air freight:** Volume = chargeable weight in kg.
+
+---
+
+## HS Code suggestion behavior
+
+When commodity is known but HS Code is not stated in the email:
+- Claude should suggest a code: `"8471.30 (suggested)"`, with `ok: false`
+- Do NOT add HS Code to `missing[]` when a suggestion is provided
+- Frontend renders suggested codes with an amber "AI" tag, not green check
+
+---
+
+## Quote Readiness — Replit reference (10 fields)
+
+The Replit version uses these 10 fields for readiness score:
+```
+Contact, Email, Company, Freight Mode, POL, POD, Commodity, HS Code, Volume, Container
+```
+
+Check order per field:
+1. `rfq.fields` — any field with matching `k` and `ok: true`?
+2. Contact → use `effectiveSender(rfq).name` (if not @oneport365.com)
+3. Email → use `effectiveSender(rfq).email` (if not @oneport365.com)
+4. Otherwise → "missing"
+
+Score display: `X/10` — green ≥ 80%, amber ≥ 50%, red < 50%.
+
+---
+
+## Multi-shipment group handling
+
+When Claude detects multiple shipments in one email:
+- `groupId` (UUID) shared across all RFQs from the same email
+- `groupIndex` (1-based position), `groupTotal` (count)
+- Inbox shows group badge: "Group 1/3"
+- Extraction panel shows tabs (one per shipment)
+- Tab label = first word of Commodity, or `rfq.ref` fallback
+- All tabs share the same `followUpDraft` (from `groupIndex=1`)
+
+---
+
+## Pre-classification — full Replit version
+
+The Replit `preClassifyEmail()` has stronger rate-reply detection than our current code:
+
+```typescript
+// Strong rate-reply signals (no "Re:" needed)
+const strongRateSignals = [
+  /please find (?:below|attached|herewith).*(?:rates?|tariff|quotation)/i,
+  /kindly find (?:attached|below).*(?:rates?|tariff)/i,
+  /all[- ]in.*usd.*per.*(?:teu|container|box)/i,
+  /(?:20ft|40ft|40hc).*:\s*(?:usd|n\/a)\s*[\d,]+/i,
+];
+
+// Rate reply to rate request
+if (/^re:\s*rate request\s*[—–-]/i.test(subject)) {
+  const rateSignals = [
+    /usd\s*[\d,]+/i, /\$\s*[\d,]+/,
+    /40(?:ft|hc).*usd|usd.*40(?:ft|hc)/i, /option\s*\d+/i,
+    /validity[:\s].*\d{4}/i, /all[- ]in\s+rate/i,
+    /carrier\s*:/i, /transit\s*time/i,
+    /please find.*rates|rates.*below/i,
+  ];
+  if (rateSignals.some(r => r.test(body))) return "rate-reply";
+}
+```
+
+Rate-reply handling: when detected, fire `POST /api/rates/parse-email` (fire-and-forget) to auto-extract rate entries into `ocean_freight_rates` table. No RFQ row created.
+
+---
+
+## Rate email auto-parsing (future feature)
+
+When a rate-reply is detected:
+1. Call Claude to extract rate entries from the email body
+2. Map sender domain to `partners` table
+3. Insert into `ocean_freight_rates`
+4. Fields extracted: carrier, polCode, podCode, equipmentType, currency, amount20ft/40ft/40hc, transitTime, freeTime, expiryDate
+
+This is the `POST /api/rates/parse-email` endpoint — exists in Replit, not yet implemented here.
+
+---
+
+## Replit features NOT yet implemented (future phases)
+
+These exist in the Replit version but are out of scope for now:
+
+- **Sync as background job** — POST /api/gmail/sync returns `{ jobId }`, poll with GET /api/gmail/sync/status/:jobId (progress bar in UI)
+- **Rate email auto-parse** — Claude extracts rate entries from rate-reply emails
+- **Partner rate request** — POST /api/rfqs/:id/request-rates sends email to matching partners
+- **CMA CGM SpotOn API** — live spot rate queries
+- **Maersk Spot API** — live spot rate import
+- **Market intelligence scrapers** — Xeneta, Drewry, carrier page scraping
+- **WATI/WhatsApp integration** — webhook, send, conversations
+- **Microsoft Graph direct sync** — app-only sync via tenant credentials
+- **Shared mailbox** — borrows OAuth tokens from existing account
+- **RFQ pipeline view** — /rfq_pipeline.html demo
+- **Rate management UI** — /rates.html with inline edit, CSV import
+- **Password gate** — localStorage auth check
+
+---
+
 ## Anti-patterns to avoid
 
 - Scanning full mailbox (IMAP without SEARCH keywords)
