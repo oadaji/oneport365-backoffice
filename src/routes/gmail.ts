@@ -135,11 +135,22 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
       client.on("error", () => {});
       await client.connect();
 
+      // Reload account to get latest lastSyncedAt
+      const freshAccount = await EmailAccount.findById(account.id);
+
       const lock = await client.getMailboxLock("INBOX");
       try {
         // IMAP SEARCH — server-side filter for shipping emails only
-        // Search multiple keywords individually and merge UIDs
-        const sinceDate = new Date(Date.now() - 60 * 86400_000);
+        // First sync: go back 30 days. Subsequent syncs: only since last sync.
+        let sinceDate: Date;
+        if (freshAccount?.lastSyncedAt) {
+          // Subsequent sync — only fetch emails since last sync (with 1 hour buffer)
+          sinceDate = new Date(new Date(freshAccount.lastSyncedAt).getTime() - 3600_000);
+        } else {
+          // First sync — go back 30 days
+          sinceDate = new Date(Date.now() - 30 * 86400_000);
+        }
+
         const shippingKeywords = [
           "RFQ", "quote", "freight", "shipment", "shipping", "container",
           "FCL", "LCL", "booking", "rates", "EXW", "FOB", "CIF",
