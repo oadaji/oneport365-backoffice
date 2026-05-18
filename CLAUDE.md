@@ -1,97 +1,57 @@
 # CLAUDE.md — Session Protocol for OnePort 365 Backoffice
 
-> This file governs how Claude Code operates in this repo. Read it fully before every session.
+> Read this fully before every session. This is the source of truth for how to work.
 
 ---
 
-## Session-start protocol (mandatory, every session)
+## 1. Session-start protocol
 
 1. Re-read `CLAUDE.md`, `SPEC.md`, and `PROGRESS.md` in full.
-2. Run: `git log --oneline -10`, `git status`, baseline checks (see below).
-3. Report back in this format — do not write code until confirmed:
-
-```
-Last session: [task #] done — [one-line proof it works].
-Open: [task #] not started / in progress.
-I propose: [task #] — [what you will do].
-Acceptance check: [how to verify it works].
-OK to proceed?
-```
-
-4. Wait for user confirmation before writing any code.
-
----
-
-## Baseline checks (run at session start)
-
+2. Run baseline checks:
 ```bash
 cd /Users/okpanachi/oneport365-backoffice
-npx tsc --noEmit                    # backend type-check
-cd client && npx tsc --noEmit       # frontend type-check
+npx tsc --noEmit
+cd client && npx tsc --noEmit
 curl -s https://oneport365-backoffice-production.up.railway.app/api/health
 curl -s https://oneport365-backoffice-production.up.railway.app/api/health/claude
 ```
+3. Report back — do not write code until confirmed:
+```
+Last session: [task #] done — [one-line proof].
+Open: [task #] status.
+I propose: [task #] — [what + acceptance check].
+OK to proceed?
+```
 
 ---
 
-## Rules
+## 2. Rules
 
-- **CLAUDE.md is the source of truth for how to work.** SPEC.md is the source of truth for what to build.
-- **Do not invent features, fields, routes, or UI** not in SPEC.md. If you think something is needed, add it to `PROGRESS.md → Open questions` and stop.
-- **Do not rewrite the quote prompt** in `quote_claude_prompt.txt`. Wire it as-is.
-- **Never scan a full mailbox.** Every IMAP SEARCH must carry shipping-keyword filters.
-- **Never return a blank pane.** Every list must handle loading, error, and empty states.
-- **One Claude call per thread**, not per message.
-- **Update PROGRESS.md** at the end of every session with what was done, committed, and what's next.
-- **Commit with the task number** in the message, e.g. `Task 5: Add Outlook Graph API sync`.
-
----
-
-## Hard-won lessons (DO NOT RELEARN THESE)
-
-### Railway deployment gotchas
-
-1. **`ANTHROPIC_API_KEY` doesn't work as a variable name on Railway.** Use `CLAUDE_API_KEY` instead. The code reads both: `process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY`.
-2. **dotenv must NOT run in production.** The `.env` file baked into builds overrides Railway's variables. Server.ts does NOT import dotenv — dev mode uses `-r dotenv/config` flag instead.
-3. **Railway auto-deploy is unreliable.** Often needs a `git commit --allow-empty -m "Trigger deploy" && git push` or manual redeploy from the dashboard.
-4. **Railway networking port:** The app listens on whatever `PORT` Railway sets (usually 8080). The networking config in Railway Settings must match.
-5. **Express 5 catch-all route:** Use `"/{*splat}"` not `"*"` — Express 5 uses path-to-regexp v8.
-6. **CI treats ESLint warnings as errors.** Never leave unused imports/variables — the React build will fail on Railway.
-
-### Claude API gotchas
-
-7. **Model ID:** The working model is `claude-haiku-4-5-20251001`. Other IDs (`claude-sonnet-4-6-20250514`, `claude-3-5-sonnet-20241022`, `claude-sonnet-4-5-20241022`) all return 404 on this API key.
-8. **API key check:** Always test with `GET /api/health/claude` after deploy to verify Claude is working before syncing emails.
-9. **Silent extraction failure:** If Claude fails, the catch block returns only `{ Customer, Email }` as fallback — everything else shows "missing". Always check the model ID and API key first.
-
-### Email sync gotchas
-
-10. **`list-unsubscribe` header:** mailparser returns headers as a `Map`, not a plain object. Use `parsed.headers.has("list-unsubscribe")`, NOT `headers?.["list-unsubscribe"]`.
-11. **IMAP SEARCH with ImapFlow:** The `or` parameter does NOT support arrays. Search each keyword individually and merge UIDs: `for (const kw of keywords) { uids = await client.search({ since, subject: kw }, { uid: true }); }`.
-12. **"free shipping" false positives:** IMAP SEARCH catches retail promo emails containing "shipping". Claude classification is the final filter — the prompt must explicitly instruct that retail "free shipping" is NOT freight.
-13. **CRM pollution:** Never call `resolveContact()` until AFTER Claude confirms the email is a freight RFQ. Otherwise every promo email creates a CRM record.
-
-### Frontend gotchas
-
-14. **Field name mismatch:** Claude returns `"Customer"` (not "Contact") and `"Weight"` (not "Tonnage"). The `QUOTE_REQUIRED` array in `RfqInbox.tsx` must match Claude's exact field names: `["Company", "Customer", "Email", "Commodity", "HS Code", "Weight", "Volume", "POL", "POD", "Container"]`.
-15. **Sync button must call POST /api/gmail/sync**, not just reload RFQs. The old code only called `GET /api/rfqs` which just re-fetched existing data.
+- SPEC.md is the source of truth for what to build. Do not invent features.
+- Do not rewrite the quote prompt in `quote_claude_prompt.txt`.
+- Never scan a full mailbox. Every IMAP SEARCH must carry keyword filters.
+- Never return a blank pane. Handle loading, error, and empty states.
+- One Claude call per thread, not per message.
+- Update PROGRESS.md at end of every session.
+- Commit with the task number: `Task 5: Add Outlook Graph API sync`.
 
 ---
 
-## Tech stack (do not change without discussion)
+## 3. Tech stack
 
-- **Backend:** Node 20, Express 5, TypeScript, Mongoose + MongoDB
-- **Frontend:** React 18 (CRA), TypeScript, inline styles (design system in index.css)
-- **Email:** Gmail via IMAP (app password) + Outlook via Microsoft Graph OAuth
-- **AI:** Anthropic Claude (`claude-haiku-4-5-20251001`) for extraction + quote generation
-- **Deploy:** Railway (auto-deploy from main branch, often needs manual trigger)
-- **Package manager:** npm
+| Layer | Technology |
+|-------|-----------|
+| Backend | Node 20, Express 5, TypeScript, Mongoose + MongoDB |
+| Frontend | React 18 (CRA), TypeScript, inline styles |
+| Email | Gmail via IMAP (app password) + Outlook via Microsoft Graph OAuth |
+| AI | Anthropic Claude `claude-haiku-4-5-20251001` |
+| Deploy | Railway (often needs manual redeploy) |
 
 ---
 
-## Environment variables
+## 4. Environment variables
 
-### Local (.env — gitignored)
+**Local (.env, gitignored):**
 ```
 PORT=5001
 MONGODB_URI=mongodb://localhost:27017/oneport365
@@ -101,19 +61,18 @@ MICROSOFT_CLIENT_SECRET=
 MICROSOFT_REDIRECT_URI=http://localhost:5001/api/auth/microsoft/callback
 ```
 
-### Railway (set in Variables tab, Raw Editor)
+**Railway (set via Raw Editor):**
 ```
-CLAUDE_API_KEY       — use this name, NOT ANTHROPIC_API_KEY
-MONGODB_URI          — from Railway MongoDB plugin (use public URL)
-NIXPACKS_NO_CACHE    — set to 1
+CLAUDE_API_KEY       — NOT ANTHROPIC_API_KEY (Railway won't inject it)
+MONGODB_URI          — Railway MongoDB public URL
+NIXPACKS_NO_CACHE    — 1
 ```
 
-Gmail uses app passwords (no env vars — stored in DB via Email Monitoring UI).
-Microsoft OAuth vars added when Phase 2 is implemented.
+Gmail app passwords are stored in DB via Email Monitoring UI — no env vars.
 
 ---
 
-## Key files
+## 5. Key files
 
 | Area | Files |
 |------|-------|
@@ -121,316 +80,217 @@ Microsoft OAuth vars added when Phase 2 is implemented.
 | Email filters | `src/lib/email-filters.ts` |
 | AI extraction | `src/lib/ai-extract.ts` |
 | AI quote gen | `src/lib/ai-quote.ts` |
-| Quote prompt | `/Users/okpanachi/Downloads/quote_claude_prompt (1).txt` |
 | Models | `src/models/*.ts` |
 | Routes index | `src/routes/index.ts` |
 | Frontend inbox | `client/src/pages/RfqInbox.tsx` |
 | Frontend quotes | `client/src/pages/Quotes.tsx` |
-| CSS design system | `client/src/index.css` |
-| Health check | `src/routes/health.ts` (includes `/api/health/claude` test) |
-| Email sync (Gmail API — Phase 1, unused) | `src/lib/gmail-api.ts`, `src/routes/email-sync.ts` |
-| Google OAuth (unused) | `src/routes/google-auth.ts` |
+| CSS tokens | `client/src/index.css` |
+| Health + Claude test | `src/routes/health.ts` |
 | Microsoft OAuth | `src/routes/microsoft-auth.ts`, `src/lib/microsoft-oauth.ts` |
 
 ---
 
-## Debug playbook — blank inbox
+## 6. Hard-won lessons (DO NOT RELEARN)
 
-Walk these steps in order. Do not skip.
+### Railway
+1. Use `CLAUDE_API_KEY` not `ANTHROPIC_API_KEY` — Railway silently drops the latter.
+2. dotenv must NOT run in production — server.ts has no dotenv import. Dev uses `-r dotenv/config`.
+3. Auto-deploy is unreliable — use `git commit --allow-empty -m "Trigger deploy" && git push` or manual redeploy.
+4. Port: app reads `process.env.PORT` (Railway sets 8080). Networking config must match.
+5. Express 5 catch-all: `"/{*splat}"` not `"*"`.
+6. CI treats ESLint warnings as errors — no unused imports/variables.
 
-1. `GET /api/health` — is the server up? Is DB connected?
-2. `GET /api/health/claude` — does Claude API work? Check model ID and key.
-3. `GET /api/email-accounts` — are accounts configured and active?
-4. `GET /api/gmail/status` — does IMAP connection succeed?
-5. `POST /api/gmail/sync` via curl — what does the response say? (synced/skipped/errors)
-6. `GET /api/rfqs` — are there any RFQs? Check field extraction quality.
-7. Check browser console — fetch errors? CORS?
-8. Check Railway deploy logs — is the latest code actually deployed? (check uptime in /api/health)
-9. Only after steps 1-8: look at React components.
+### Claude API
+7. Working model: `claude-haiku-4-5-20251001`. All other IDs return 404 on this key.
+8. Always test with `GET /api/health/claude` after deploy before syncing.
+9. If extraction fails silently (only Customer + Email returned), check model ID and API key first.
+
+### Email sync
+10. `list-unsubscribe`: mailparser headers are a `Map` — use `.has()`, not bracket notation.
+11. IMAP SEARCH: ImapFlow `or` doesn't support arrays. Search each keyword individually, merge UIDs.
+12. "free shipping" false positives: Claude classification is the final filter. Prompt must say retail shipping ≠ freight.
+13. CRM pollution: never call `resolveContact()` before Claude confirms freight RFQ.
+
+### Frontend
+14. Claude returns `"Customer"` not "Contact", `"Weight"` not "Tonnage". QUOTE_REQUIRED must match exactly.
+15. Sync button must call `POST /api/gmail/sync`, not just reload RFQs.
 
 ---
 
-## Extraction pipeline (from Replit reference)
+## 7. Extraction pipeline
 
-### Complete flow
-
+### Flow
 ```
-Email arrives (IMAP sync)
-       │
-       ▼
-Automated filter (email-filters.ts)
-— skips newsletters, no-reply, list-unsubscribe, blocked domains
-       │
-       ▼
-IMAP SEARCH (gmail.ts)
-— server-side keyword filter: RFQ, quote, freight, shipment, container, etc.
-— 60-day window, cap 500 results
-       │
-       ▼
-For each email:
-  ├─► Check if already ingested (uid lookup)
-  ├─► Check threading (inReplyTo / subject-based fallback)
-  │    └─► If reply to existing RFQ: re-extract with full thread, update RFQ
-  │
-  ├─► extractWithClaude() — classifies + extracts fields
-  │    ├─► "customer-rfq" or "internal-rfq" → continue
-  │    ├─► "rate-reply" → accept (future: parse rates)
-  │    ├─► "promotional" / "irrelevant" / "outbound" → SKIP
-  │    └─► Returns: { shipments[], combinedDraft, detectedEmailType }
-  │
-  ├─► resolveContact() — ONLY for confirmed freight emails
-  │
-  ├─► Create Email document
-  │
-  └─► Create RFQ(s) — one per shipment detected
-       fields, missingFields, followUpDraft, status saved
+IMAP SEARCH (shipping keywords, 60-day, cap 500)
+  → Automated filter (list-unsubscribe, blocked senders/subjects)
+    → Already ingested? (uid check) → skip
+      → Threading? (inReplyTo / subject fallback) → re-extract existing RFQ
+        → extractWithClaude() → classifies + extracts 14 fields
+          → customer-rfq / internal-rfq / rate-reply → ACCEPT
+          → promotional / irrelevant / outbound → SKIP
+            → resolveContact() (only for accepted)
+              → Create Email + RFQ documents
 ```
 
-### What triggers Claude calls (5 triggers total)
+### Claude call triggers
 
-| # | Trigger | Endpoint | Claude function |
-|---|---------|----------|-----------------|
-| 1 | Sync button | `POST /api/gmail/sync` | `extractWithClaude()` per new email |
-| 2 | Opening email with replies | `POST /api/rfqs/:id/re-extract` | `extractWithClaude()` on full thread |
-| 3 | Convert to Quote button | `POST /api/quotes/generate/:rfqId` | Quote generation prompt |
-| 4 | Generate Quote modal | `POST /api/quotes/generate/:rfqId` | Quote generation prompt |
-| 5 | Regenerate Quote button | `POST /api/quotes/generate/:rfqId` | Quote generation (patch in-place) |
+| Trigger | Endpoint | Function |
+|---------|----------|----------|
+| Sync button | `POST /api/gmail/sync` | `extractWithClaude()` per email |
+| Email with replies opened | `POST /api/rfqs/:id/re-extract` | `extractWithClaude()` on full thread |
+| Generate/Convert/Regenerate Quote | `POST /api/quotes/generate/:rfqId` | Quote generation prompt |
 
-Two server-side Claude entry points: extraction (`ai-extract.ts`) and quote generation (`ai-quote.ts`).
-
-### Pre-classification (rule-based, before Claude)
-
-```typescript
-preClassifyEmail({ fromName, fromEmail, subject, body }): string | null
-```
-
-Returns:
-- `"outbound"` → OnePort's own rate-request template, skip entirely
-- `"rate-reply"` → carrier/shipping line replying with rates (body has USD amounts, 40ft/40hc, validity dates)
-- `null` → let Claude decide
-
-Outbound signals: subject starts with "Rate Request —", body contains OnePort boilerplate, from-name contains "OnePort 365".
-
-Rate-reply signals: "please find our rates", "all-in rate", rate tables with USD per container, carrier + route + amount, "Option 1 / Option 2" with prices.
-
-### Claude extraction prompt — field names (MUST MATCH FRONTEND)
-
-Claude returns these exact field keys. The frontend `QUOTE_REQUIRED` array must use these names:
+### 14 extraction fields (EXACT keys Claude returns)
 
 ```
 Customer, Company, Freight Mode, POL, POD, Commodity, HS Code,
 Weight, Volume, Pick-up, Container, Cargo class, Incoterm, Target Price
 ```
 
-Frontend QUOTE_REQUIRED (for readiness score):
-```typescript
-["Company", "Customer", "Email", "Commodity", "HS Code", "Weight", "Volume", "POL", "POD", "Container"]
-```
-
-### Claude extraction prompt — email type classification
-
-The prompt MUST include these types with clear instructions:
+### Email type classification (in Claude prompt)
 
 ```
-- "customer-rfq": actual cargo/freight that needs physical shipping
-- "rate-reply": carrier/shipping line providing rates
-- "internal-rfq": internal team forwarding customer request
-- "outbound": email sent BY OnePort
-- "promotional": marketing, retail, e-commerce, "free shipping" offers — NOT freight
-- "irrelevant": personal, social, financial — unrelated to freight forwarding
+customer-rfq  — actual cargo needing physical shipping between ports/countries
+rate-reply    — carrier/shipping line providing rates
+internal-rfq  — internal team forwarding customer request
+outbound      — email sent BY OnePort
+promotional   — marketing, retail, e-commerce ("free shipping" ≠ freight)
+irrelevant    — personal, social, financial, unrelated
 ```
 
-CRITICAL instruction in prompt: "Only classify as customer-rfq if the email is about actual cargo that needs to be physically shipped between ports/countries. Retail 'free shipping' is NEVER freight."
-
-### Claude extraction prompt — port resolution
-
-The prompt must include these port code mappings:
+### Port code mappings (in Claude prompt)
 
 ```
-Ocean: Lagos/Apapa→NGAPP, Tin Can→NGTCN, Onne→NGONE, Warri→NGWAR,
-Rotterdam→NLRTM, Hamburg→DEHAM, Shanghai→CNSHA, Qingdao→CNTAO,
-Dubai/Jebel Ali→AEJEA, Antwerp→BEANR, Istanbul/Ambarlı→TRIST,
-Tema/Accra→GHTEM, Mombasa→KEMBA, Abidjan→CIABJ, Durban→ZADUR,
-Singapore→SGSIN, Ningbo→CNNGB, Shenzhen/Yantian→CNYTN
-
+Ocean: Apapa→NGAPP, Tin Can→NGTCN, Onne→NGONE, Warri→NGWAR,
+  Rotterdam→NLRTM, Hamburg→DEHAM, Shanghai→CNSHA, Qingdao→CNTAO,
+  Dubai/Jebel Ali→AEJEA, Antwerp→BEANR, Istanbul→TRIST,
+  Tema→GHTEM, Mombasa→KEMBA, Singapore→SGSIN, Ningbo→CNNGB, Yantian→CNYTN
 Air: Lagos→LOS, Dubai→DXB, London→LHR, Frankfurt→FRA,
-Hong Kong→HKG, Shanghai→PVG, Nairobi→NBO
+  Hong Kong→HKG, Shanghai→PVG, Nairobi→NBO
 ```
 
-### Internal forward rule
+### Volume rules
+- **Ocean FCL:** container count ("2", "3") — NEVER ask for CBM
+- **Ocean LCL:** CBM or dimensions
+- **Air:** chargeable weight in kg
 
-If From address ends in @oneport365.com, scan the body for the original external sender (look for "From: Name <external@domain.com>" lines). Set Customer to that name, Company from their domain. Classify as "customer-rfq" not "internal-rfq".
+### HS Code suggestion
+- Commodity known but code not stated → suggest `"8471.30 (suggested)"`, `ok: false`
+- Do NOT add to `missing[]` when suggestion provided
+- Frontend shows amber "AI" tag (not green check)
+
+### Pre-classification (rule-based, before Claude)
+
+Returns `"outbound"` | `"rate-reply"` | `null` (let Claude decide).
+
+Outbound signals: subject "Rate Request —", body "rate request on behalf of OnePort", from-name "OnePort 365".
+
+Rate-reply signals:
+```typescript
+/please find (?:below|attached|herewith).*(?:rates?|tariff|quotation)/i
+/all[- ]in.*usd.*per.*(?:teu|container|box)/i
+/(?:20ft|40ft|40hc).*:\s*(?:usd|n\/a)\s*[\d,]+/i
+```
+
+Rate-reply handling: fire `POST /api/rates/parse-email` (auto-extract rates into DB). No RFQ created.
 
 ---
 
-## @oneport365.com internal domain rule (THREE LAYERS)
+## 8. @oneport365.com internal domain rule
 
-Any address ending `@oneport365.com` is a team member — NEVER a customer. Enforced in three layers:
+Any `@oneport365.com` address is a team member — NEVER a customer. Three enforcement layers:
 
-### Layer 1: Server — extractForwardedSender() in gmail.ts
+**Layer 1 — Server (gmail.ts):** `extractForwardedSender()` scans body for external sender before ingestion.
+- Patterns: `From: Name <ext@domain.com>`, `From: Name [mailto:ext@domain.com]`
+- Replaces fromName/fromEmail with external customer
 
-During IMAP sync, before calling `/api/rfq/ingest`, if sender is `@oneport365.com`:
-- Scan body for original external sender using patterns:
-  - `From: Name <external@domain.com>` (standard)
-  - `From: Name [mailto:external@domain.com]` (Outlook classic)
-- Replace `fromName`/`fromEmail` with the external customer
-- If no external sender found, keep the internal address but Claude will handle it
+**Layer 2 — Claude prompt:** INTERNAL FORWARD RULE instructs Claude to find external sender in body, set Customer/Company/Email to them.
 
-### Layer 2: Server — Claude prompt INTERNAL FORWARD RULE
-
-Embedded in `extractWithClaude()` prompt:
-> "If the From address ends in @oneport365.com, the email was forwarded by an internal team member. Scan the body for the original external sender. Set Customer to that name, derive Company from their signature or email domain, set Email to the external address. Classify as customer-rfq (not internal-rfq) if the body contains a forwarded customer enquiry."
-
-### Layer 3: Client — effectiveSender() in RfqInbox.tsx
-
+**Layer 3 — Frontend:** `effectiveSender()` in RfqInbox.tsx:
 ```typescript
-function isInternalAddr(email: string): boolean {
-  return email?.toLowerCase().endsWith("@oneport365.com");
-}
-
 function effectiveSender(rfq: Rfq): { name: string; email: string } {
   const em = rfq.email;
   if (!em) return { name: "Unknown", email: "" };
-  if (isInternalAddr(em.fromEmail)) {
-    const bodyMatch = em.body?.match(
+  if (em.fromEmail?.toLowerCase().endsWith("@oneport365.com")) {
+    const match = em.body?.match(
       /From:\s*([^<\n\r]+?)\s*<([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>/i
     );
-    if (bodyMatch) {
-      const extEmail = bodyMatch[2].toLowerCase();
-      if (!isInternalAddr(extEmail))
-        return { name: bodyMatch[1].trim(), email: extEmail };
-    }
+    if (match && !match[2].toLowerCase().endsWith("@oneport365.com"))
+      return { name: match[1].trim(), email: match[2].toLowerCase() };
   }
   return { name: em.fromName || em.fromEmail, email: em.fromEmail };
 }
 ```
+Used in: inbox display, email header, compose To field, Quote Readiness Contact/Email.
 
-Used in: inbox sender display, email header, compose tray To field, Quote Readiness Contact+Email auto-fill.
-
-**If any layer is missing, the UI shows @oneport365.com as "customer".**
-
----
-
-## Volume field rules
-
-Claude must follow these rules for the Volume field:
-- **Ocean FCL:** Volume = container count ("2", "3"). NEVER ask for CBM on FCL shipments.
-- **Ocean LCL:** Volume = CBM or dimensions.
-- **Air freight:** Volume = chargeable weight in kg.
+**If any layer is missing, @oneport365.com shows as "customer".**
 
 ---
 
-## HS Code suggestion behavior
-
-When commodity is known but HS Code is not stated in the email:
-- Claude should suggest a code: `"8471.30 (suggested)"`, with `ok: false`
-- Do NOT add HS Code to `missing[]` when a suggestion is provided
-- Frontend renders suggested codes with an amber "AI" tag, not green check
-
----
-
-## Quote Readiness — Replit reference (10 fields)
-
-The Replit version uses these 10 fields for readiness score:
-```
-Contact, Email, Company, Freight Mode, POL, POD, Commodity, HS Code, Volume, Container
-```
-
-Check order per field:
-1. `rfq.fields` — any field with matching `k` and `ok: true`?
-2. Contact → use `effectiveSender(rfq).name` (if not @oneport365.com)
-3. Email → use `effectiveSender(rfq).email` (if not @oneport365.com)
-4. Otherwise → "missing"
-
-Score display: `X/10` — green ≥ 80%, amber ≥ 50%, red < 50%.
-
----
-
-## Multi-shipment group handling
-
-When Claude detects multiple shipments in one email:
-- `groupId` (UUID) shared across all RFQs from the same email
-- `groupIndex` (1-based position), `groupTotal` (count)
-- Inbox shows group badge: "Group 1/3"
-- Extraction panel shows tabs (one per shipment)
-- Tab label = first word of Commodity, or `rfq.ref` fallback
-- All tabs share the same `followUpDraft` (from `groupIndex=1`)
-
----
-
-## Pre-classification — full Replit version
-
-The Replit `preClassifyEmail()` has stronger rate-reply detection than our current code:
+## 9. Quote Readiness (10 fields)
 
 ```typescript
-// Strong rate-reply signals (no "Re:" needed)
-const strongRateSignals = [
-  /please find (?:below|attached|herewith).*(?:rates?|tariff|quotation)/i,
-  /kindly find (?:attached|below).*(?:rates?|tariff)/i,
-  /all[- ]in.*usd.*per.*(?:teu|container|box)/i,
-  /(?:20ft|40ft|40hc).*:\s*(?:usd|n\/a)\s*[\d,]+/i,
-];
-
-// Rate reply to rate request
-if (/^re:\s*rate request\s*[—–-]/i.test(subject)) {
-  const rateSignals = [
-    /usd\s*[\d,]+/i, /\$\s*[\d,]+/,
-    /40(?:ft|hc).*usd|usd.*40(?:ft|hc)/i, /option\s*\d+/i,
-    /validity[:\s].*\d{4}/i, /all[- ]in\s+rate/i,
-    /carrier\s*:/i, /transit\s*time/i,
-    /please find.*rates|rates.*below/i,
-  ];
-  if (rateSignals.some(r => r.test(body))) return "rate-reply";
-}
+// Replit reference fields
+["Contact", "Email", "Company", "Freight Mode", "POL", "POD",
+ "Commodity", "HS Code", "Volume", "Container"]
 ```
 
-Rate-reply handling: when detected, fire `POST /api/rates/parse-email` (fire-and-forget) to auto-extract rate entries into `ocean_freight_rates` table. No RFQ row created.
+Check order: (1) rfq.fields with `ok: true`, (2) Contact/Email from `effectiveSender()`, (3) "missing".
+
+Score: `X/10` — green ≥ 80%, amber ≥ 50%, red < 50%.
 
 ---
 
-## Rate email auto-parsing (future feature)
+## 10. Multi-shipment groups
 
-When a rate-reply is detected:
-1. Call Claude to extract rate entries from the email body
-2. Map sender domain to `partners` table
-3. Insert into `ocean_freight_rates`
-4. Fields extracted: carrier, polCode, podCode, equipmentType, currency, amount20ft/40ft/40hc, transitTime, freeTime, expiryDate
-
-This is the `POST /api/rates/parse-email` endpoint — exists in Replit, not yet implemented here.
+- `groupId` (UUID) shared across RFQs from same email
+- `groupIndex` (1-based), `groupTotal` (count)
+- Inbox: group badge "Group 1/3"
+- Extraction panel: tabs per shipment (label = first word of Commodity)
+- All tabs share `followUpDraft` from `groupIndex=1`
 
 ---
 
-## Replit features NOT yet implemented (future phases)
+## 11. Debug playbook — blank inbox
 
-These exist in the Replit version but are out of scope for now:
+Walk in order. Do not skip.
 
-- **Sync as background job** — POST /api/gmail/sync returns `{ jobId }`, poll with GET /api/gmail/sync/status/:jobId (progress bar in UI)
-- **Rate email auto-parse** — Claude extracts rate entries from rate-reply emails
-- **Partner rate request** — POST /api/rfqs/:id/request-rates sends email to matching partners
-- **CMA CGM SpotOn API** — live spot rate queries
-- **Maersk Spot API** — live spot rate import
-- **Market intelligence scrapers** — Xeneta, Drewry, carrier page scraping
-- **WATI/WhatsApp integration** — webhook, send, conversations
-- **Microsoft Graph direct sync** — app-only sync via tenant credentials
-- **Shared mailbox** — borrows OAuth tokens from existing account
-- **RFQ pipeline view** — /rfq_pipeline.html demo
-- **Rate management UI** — /rates.html with inline edit, CSV import
-- **Password gate** — localStorage auth check
+1. `GET /api/health` — server up? DB connected?
+2. `GET /api/health/claude` — Claude working? Model ID correct?
+3. `GET /api/email-accounts` — accounts configured?
+4. `GET /api/gmail/status` — IMAP connection succeeds?
+5. `POST /api/gmail/sync` — synced/skipped/errors?
+6. `GET /api/rfqs` — RFQs exist? Check field quality.
+7. Browser console — fetch errors? CORS?
+8. Railway deploy logs — latest code deployed? (check uptime)
+9. Only then: look at React components.
 
 ---
 
-## Anti-patterns to avoid
+## 12. Future features (exist in Replit, not yet implemented)
 
-- Scanning full mailbox (IMAP without SEARCH keywords)
+- Sync as background job with progress polling
+- Rate email auto-parse (Claude extracts rates from rate-replies)
+- Partner rate request via email
+- CMA CGM SpotOn / Maersk Spot API
+- Market intelligence scrapers (Xeneta, Drewry)
+- WATI/WhatsApp integration
+- Microsoft Graph direct sync (app-only, tenant credentials)
+- Shared mailbox (borrows OAuth tokens)
+- Rate management UI with inline edit + CSV import
+
+---
+
+## 13. Anti-patterns
+
+- Scanning full mailbox without SEARCH keywords
 - Calling Claude per message instead of per thread
-- Creating CRM contacts for non-freight emails
-- Returning `null` from render when data is empty
-- Adding features not in SPEC.md
-- Skipping PROGRESS.md update at end of session
-- Using `localStorage` for anything that should be server-side
-- Storing API keys or tokens in frontend code
-- Using `ANTHROPIC_API_KEY` as Railway variable name (use `CLAUDE_API_KEY`)
-- Using model IDs other than `claude-haiku-4-5-20251001` without testing first
-- Checking mailparser headers with bracket notation (use `.has()` / `.get()`)
-- Calling `resolveContact()` before Claude classification
-- Using `"Contact"` or `"Tonnage"` in frontend field matching (Claude returns `"Customer"` and `"Weight"`)
+- Creating CRM contacts before Claude classification
+- Returning blank pane (no loading/error/empty state)
+- Inventing features not in SPEC.md
+- Skipping PROGRESS.md update
+- Using `ANTHROPIC_API_KEY` on Railway (use `CLAUDE_API_KEY`)
+- Using untested model IDs
+- Checking mailparser headers with `[]` (use `.has()`)
+- Using `"Contact"` or `"Tonnage"` in frontend (Claude returns `"Customer"`, `"Weight"`)
+- Storing tokens/keys in frontend code
