@@ -25,7 +25,7 @@ router.get("/health/claude", async (_req: Request, res: Response) => {
     const anthropic = new Anthropic({ apiKey: key });
     const models = [
       "claude-sonnet-4-5-20241022",
-      "claude-3-5-sonnet-20241022",
+      "claude-haiku-4-5-20251001",
       "claude-3-5-sonnet-latest",
       "claude-3-haiku-20240307",
       "claude-3-sonnet-20240229",
