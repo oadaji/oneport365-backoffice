@@ -289,13 +289,13 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
 
             const resolvedType = extraction.detectedEmailType || "customer-rfq";
 
-            // Skip only outbound emails (sent BY OnePort)
-            if (resolvedType === "outbound") {
+            // Only accept actual freight RFQs — skip everything else
+            if (resolvedType !== "customer-rfq" && resolvedType !== "internal-rfq" && resolvedType !== "rate-reply") {
               totalSkipped++;
               continue;
             }
 
-            // Create CRM contact and email record for all shipping-related emails
+            // Create CRM contact and email record for confirmed freight emails
             const crm = await resolveContact({
               email: fromEmail,
               name: fromName,

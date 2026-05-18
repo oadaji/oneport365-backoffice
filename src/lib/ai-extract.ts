@@ -30,10 +30,14 @@ export async function extractWithClaude(
 
 STEP 1 — EMAIL TYPE CLASSIFICATION
 Classify this email as ONE of:
-- "customer-rfq": a customer asking for a freight rate/quote/shipping price
+- "customer-rfq": a customer asking for a freight rate/quote/shipping price for actual cargo
 - "rate-reply": a shipping line/carrier replying with rates
 - "internal-rfq": internal team forwarding a customer request
 - "outbound": an outbound email sent BY OnePort (not an enquiry)
+- "promotional": marketing/promotional email, newsletter, retail offer, e-commerce, food delivery, subscription service, personal shopping — NOT a real freight shipment request. "Free shipping" on retail products is NOT freight shipping.
+- "irrelevant": personal email, social notification, financial statement, calendar invite, or anything unrelated to freight forwarding
+
+CRITICAL: Only classify as "customer-rfq" or "internal-rfq" if the email is about actual cargo/freight that needs to be physically shipped between ports/countries using containers, vessels, or aircraft. Retail "free shipping" offers, e-commerce order confirmations, and marketing emails about product sales are NEVER freight RFQs.
 
 STEP 2 — MULTI-SHIPMENT DETECTION
 If the email contains multiple distinct shipment requests (different commodities, different origins/destinations, phrases like "also need", "another shipment"), extract each as a separate shipment.
