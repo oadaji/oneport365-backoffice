@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY });
 
 export interface SingleExtraction {
   label: string;
@@ -92,7 +92,8 @@ Rules:
 - If not a customer-rfq, return empty shipments array`;
 
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
+    const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+    if (!apiKey) {
       throw new Error("ANTHROPIC_API_KEY not set");
     }
 

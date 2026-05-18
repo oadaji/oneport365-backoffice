@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { OceanFreightRate, HaulageImportRate, HaulageExportRate, OtherCharge } from "../models/rate";
 import { AppSetting } from "../models/market";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY });
 
 interface RfqData {
   ref: string;

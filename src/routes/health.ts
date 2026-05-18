@@ -9,16 +9,16 @@ router.get("/health", (_req: Request, res: Response) => {
     status: "ok",
     db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
     uptime: process.uptime(),
-    envKeys: Object.keys(process.env).filter(k => k.includes("ANTHROPIC") || k.includes("MONGO") || k.includes("PORT") || k.includes("RAILWAY")),
+    envKeys: Object.keys(process.env).filter(k => k.includes("ANTHROPIC") || k.includes("CLAUDE") || k.includes("MONGO") || k.includes("PORT") || k.includes("RAILWAY")),
   });
 });
 
 // GET /api/health/claude — test Claude API connection
 router.get("/health/claude", async (_req: Request, res: Response) => {
   try {
-    const key = process.env.ANTHROPIC_API_KEY;
+    const key = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
     if (!key) {
-      res.json({ ok: false, error: "ANTHROPIC_API_KEY not set" });
+      res.json({ ok: false, error: "Neither ANTHROPIC_API_KEY nor CLAUDE_API_KEY is set" });
       return;
     }
 
