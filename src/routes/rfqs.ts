@@ -149,7 +149,7 @@ router.get("/rfqs/:id/thread", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/rfqs/:id/re-extract — re-run Claude extraction
+// POST /api/rfqs/:id/re-extract — re-run Claude extraction with full thread
 router.post("/rfqs/:id/re-extract", async (req: Request, res: Response) => {
   try {
     const rfq = await Rfq.findById(req.params.id).populate("emailId");
@@ -158,16 +158,33 @@ router.post("/rfqs/:id/re-extract", async (req: Request, res: Response) => {
     const email = rfq.emailId as any;
     if (!email) { res.status(400).json({ error: "No email linked" }); return; }
 
+    // Build full thread: original email + all replies
+    const { Email: EmailModel } = require("../models/email");
+    const replies = await EmailModel.find({ parentEmailId: email._id }).sort({ receivedAt: 1 });
+
+    let threadBody = email.body || "";
+    if (replies.length > 0) {
+      const replyTexts = replies.map((r: any) =>
+        `\n\n──────────────\nReply from ${r.fromName} on ${r.receivedAt?.toISOString?.() || "unknown"}:\n${r.body}`
+      ).join("");
+      threadBody = `Original:\n${email.body}${replyTexts}`;
+    }
+
     const { extractWithClaude } = require("../lib/ai-extract");
     const extraction = await extractWithClaude(
-      { fromName: email.fromName, fromEmail: email.fromEmail, subject: email.subject, body: email.body },
+      { fromName: email.fromName, fromEmail: email.fromEmail, subject: email.subject, body: threadBody },
       rfq.emailType
     );
 
     if (extraction.shipments.length > 0) {
       const s = extraction.shipments[0];
+      // Advance status if replies exist
+      let newStatus = s.status;
+      if (replies.length > 0 && s.missing.length === 0) newStatus = "ready";
+      else if (replies.length > 0) newStatus = "replied";
+
       const updated = await Rfq.findByIdAndUpdate(rfq._id, {
-        status: s.status,
+        status: newStatus as any,
         fields: s.fields,
         missingFields: s.missing,
         followUpDraft: extraction.combinedDraft || s.draft,

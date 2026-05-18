@@ -169,7 +169,16 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
             const fromEmail = fromAddr.address.toLowerCase();
             const fromName = fromAddr.name || fromEmail;
             const subject = parsed.subject || "(no subject)";
-            const body = parsed.text || parsed.html || "";
+            // Prefer plain text, fall back to stripped HTML. For forwarded emails,
+            // the original content is often only in HTML — strip tags and use it.
+            let body = parsed.text || "";
+            if (parsed.html) {
+              const strippedHtml = parsed.html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+              // Use HTML version if it has significantly more content
+              if (strippedHtml.length > body.length * 1.5) body = strippedHtml;
+            }
+            // Truncate to 15000 chars to match extraction limit
+            if (typeof body === "string" && body.length > 15000) body = body.slice(0, 15000);
             const messageId = normaliseMessageId(parsed.messageId);
             const inReplyTo = normaliseMessageId(parsed.inReplyTo as string);
             const cc = parsed.cc ? (Array.isArray(parsed.cc) ? parsed.cc : [parsed.cc]).map((c) => c.text).join(", ") : null;
