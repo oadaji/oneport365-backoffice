@@ -23,14 +23,30 @@ router.get("/health/claude", async (_req: Request, res: Response) => {
     }
 
     const anthropic = new Anthropic({ apiKey: key });
-    const response = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 20,
-      messages: [{ role: "user", content: "Say OK" }],
-    });
+    const models = [
+      "claude-sonnet-4-5-20241022",
+      "claude-3-5-sonnet-20241022",
+      "claude-3-5-sonnet-latest",
+      "claude-3-haiku-20240307",
+      "claude-3-sonnet-20240229",
+    ];
 
-    const text = (response.content[0] as any).text || "";
-    res.json({ ok: true, response: text, model: response.model });
+    for (const model of models) {
+      try {
+        const response = await anthropic.messages.create({
+          model,
+          max_tokens: 20,
+          messages: [{ role: "user", content: "Say OK" }],
+        });
+        const text = (response.content[0] as any).text || "";
+        res.json({ ok: true, response: text, model: response.model, triedModel: model });
+        return;
+      } catch (e: any) {
+        if (!e.message?.includes("not_found")) throw e;
+        // try next model
+      }
+    }
+    res.json({ ok: false, error: "No available model found", triedModels: models });
   } catch (err: any) {
     res.json({ ok: false, error: err.message, type: err.constructor.name });
   }
