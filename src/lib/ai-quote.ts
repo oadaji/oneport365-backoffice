@@ -222,7 +222,7 @@ Respond with ONLY valid JSON in this exact format:
 }`;
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6-20250514",
+    model: "claude-3-5-sonnet-20241022",
     max_tokens: 4000,
     messages: [{ role: "user", content: prompt }],
   });
