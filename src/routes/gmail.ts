@@ -287,10 +287,16 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
               "customer-rfq"
             );
 
-            const resolvedType = extraction.detectedEmailType || "customer-rfq";
+            const resolvedType = extraction.detectedEmailType || "irrelevant";
 
             // Only accept actual freight RFQs — skip everything else
             if (resolvedType !== "customer-rfq" && resolvedType !== "internal-rfq" && resolvedType !== "rate-reply") {
+              totalSkipped++;
+              continue;
+            }
+
+            // Skip if no shipments extracted (extraction failed or empty)
+            if (!extraction.shipments || extraction.shipments.length === 0) {
               totalSkipped++;
               continue;
             }

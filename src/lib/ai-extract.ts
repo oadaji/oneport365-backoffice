@@ -118,18 +118,12 @@ Rules:
     };
   } catch (err: any) {
     console.error("Claude extraction failed:", err?.message || err);
+    // Return empty shipments + "irrelevant" type so failed extractions are SKIPPED
+    // Do NOT create RFQs for emails we couldn't classify
     return {
-      shipments: [{
-        label: "Extraction failed",
-        fields: [
-          { k: "Customer", v: email.fromName, ok: true },
-          { k: "Email", v: email.fromEmail, ok: true },
-        ],
-        missing: ["POL", "POD", "Commodity", "Container"],
-        draft: null,
-        status: "info_needed",
-      }],
+      shipments: [],
       combinedDraft: null,
+      detectedEmailType: "irrelevant",
     };
   }
 }
