@@ -1,6 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY });
+function getAnthropicClient() {
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+  if (!apiKey) throw new Error("No Claude API key set (ANTHROPIC_API_KEY or CLAUDE_API_KEY)");
+  return new Anthropic({ apiKey });
+}
 
 export interface SingleExtraction {
   label: string;
@@ -119,14 +123,11 @@ Return ONLY valid JSON:
 }`;
 
   try {
-    const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
-    if (!apiKey) {
-      throw new Error("ANTHROPIC_API_KEY not set");
-    }
+    const client = getAnthropicClient();
 
-    const response = await anthropic.messages.create({
+    const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 2000,
+      max_tokens: 4000,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -140,9 +141,10 @@ Return ONLY valid JSON:
       detectedEmailType: parsed.detectedEmailType,
     };
   } catch (err: any) {
-    console.error("Claude extraction failed:", err?.message || err);
+    console.error("Claude extraction failed for:", email.subject?.slice(0, 50));
+    console.error("  Error:", err?.message || err);
+    console.error("  Error type:", err?.constructor?.name);
     // Return empty shipments + "irrelevant" type so failed extractions are SKIPPED
-    // Do NOT create RFQs for emails we couldn't classify
     return {
       shipments: [],
       combinedDraft: null,
