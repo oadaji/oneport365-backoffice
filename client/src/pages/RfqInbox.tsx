@@ -298,7 +298,7 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-const QUOTE_REQUIRED = ["Company", "Contact", "Email", "Commodity", "HS Code", "Tonnage", "Volume", "POL", "POD", "Container"];
+const QUOTE_REQUIRED = ["Company", "Customer", "Email", "Commodity", "HS Code", "Weight", "Volume", "POL", "POD", "Container"];
 
 function fieldVal(fields: { k: string; v: string; ok: boolean }[], key: string): string {
   const f = fields.find((x) => x.k.toLowerCase().includes(key.toLowerCase()));
