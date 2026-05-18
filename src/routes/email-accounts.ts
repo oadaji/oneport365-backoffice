@@ -80,6 +80,8 @@ router.post("/email-accounts/:id/test", async (req: Request, res: Response) => {
     const status = await client.status("INBOX", { messages: true, unseen: true });
     await client.logout();
 
+    // Clear lastError on successful test
+    await EmailAccount.findByIdAndUpdate(req.params.id, { lastError: null });
     res.json({ ok: true, message: `Connected. ${status.messages} messages, ${status.unseen} unread.` });
   } catch (err: any) {
     const msg = err.message?.includes("AUTHENTICATIONFAILED")

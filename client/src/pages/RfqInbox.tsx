@@ -181,9 +181,9 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
                     border: `1px solid ${acc.provider === "outlook" ? "#bdd4f7" : "#fecaca"}`,
                   }}>
                     {acc.provider === "outlook" ? (
-                      <img src="https://img.icons8.com/color/48/microsoft-outlook-2019--v2.png" alt="Outlook" width="22" height="22" style={{ objectFit: "contain" }} />
+                      <svg width="22" height="22" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" fill="#0078D4"/><path d="M1 6l11 7 11-7" fill="none" stroke="#fff" strokeWidth="1.5"/><ellipse cx="8" cy="13" rx="5" ry="6" fill="#0A4E8A"/><ellipse cx="8" cy="13" rx="3.5" ry="4.5" fill="#fff"/></svg>
                     ) : (
-                      <img src="https://www.gstatic.com/images/branding/product/1x/gmail_2020q4_20dp.png" alt="Gmail" width="22" height="22" style={{ objectFit: "contain" }} />
+                      <svg width="22" height="22" viewBox="0 0 24 24"><path d="M22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6z" fill="#F4F4F4"/><path d="M22 6l-10 7L2 6" fill="none" stroke="#EA4335" strokeWidth="1.5"/><path d="M2 6h20" fill="none" stroke="#EA4335" strokeWidth="0"/><path d="M2 6l10 7" stroke="#F6B72A" strokeWidth="1.5" fill="none"/><path d="M22 6l-10 7" stroke="#4285F4" strokeWidth="1.5" fill="none"/><path d="M2 6v12h4V10l6 4.5L18 10v8h4V6" fill="none" stroke="#0F9D58" strokeWidth="0"/><rect x="2" y="4" width="4" height="16" rx="0" fill="#4285F4"/><rect x="18" y="4" width="4" height="16" rx="0" fill="#4285F4"/><path d="M2 6l10 7L22 6" fill="none" stroke="#D94F3F" strokeWidth="2"/></svg>
                     )}
                   </div>
 
@@ -234,7 +234,7 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
               ...(connectMode === "gmail" ? { borderColor: "var(--accent)", background: "var(--accent-light)" } : {}),
             }}
           >
-            <img src="https://www.gstatic.com/images/branding/product/1x/gmail_2020q4_20dp.png" alt="Gmail" width="20" height="20" style={{ objectFit: "contain" }} />
+            <svg width="20" height="20" viewBox="0 0 24 24"><path d="M22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6z" fill="#F4F4F4"/><rect x="2" y="4" width="4" height="16" fill="#4285F4"/><rect x="18" y="4" width="4" height="16" fill="#4285F4"/><path d="M2 6l10 7L22 6" fill="none" stroke="#D94F3F" strokeWidth="2"/></svg>
             Gmail
           </button>
 
@@ -243,7 +243,7 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
             onClick={() => connectOutlook(false)}
             style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 22px", fontSize: 13 }}
           >
-            <img src="https://img.icons8.com/color/48/microsoft-outlook-2019--v2.png" alt="Outlook" width="20" height="20" style={{ objectFit: "contain" }} />
+            <svg width="20" height="20" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" fill="#0078D4"/><path d="M1 6l11 7 11-7" fill="none" stroke="#fff" strokeWidth="1.5"/><ellipse cx="8" cy="13" rx="5" ry="6" fill="#0A4E8A"/><ellipse cx="8" cy="13" rx="3.5" ry="4.5" fill="#fff"/></svg>
             Outlook
           </button>
         </div>

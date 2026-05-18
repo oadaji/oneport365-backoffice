@@ -127,6 +127,9 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
 
   for (const account of accounts) {
     try {
+      // Clear error at start of sync
+      await EmailAccount.findByIdAndUpdate(account.id, { lastError: null });
+
       const client = createImapClient(account);
 
       client.on("error", () => {});
