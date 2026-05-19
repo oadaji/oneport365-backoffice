@@ -429,6 +429,8 @@ export default function RfqInbox() {
   const [generating, setGenerating] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
+  const [threadReplies, setThreadReplies] = useState<any[]>([]);
+  const [reExtracting, setReExtracting] = useState(false);
 
   useEffect(() => {
     loadRfqs();
@@ -456,12 +458,34 @@ export default function RfqInbox() {
     }
   };
 
-  const selectRfq = (r: Rfq) => {
+  const selectRfq = async (r: Rfq) => {
     setSelected(r);
     setShowReply(false);
     setBriefOpen(false);
+    setThreadReplies([]);
     if (r.followUpDraft) setReplyDraft(r.followUpDraft);
     else setReplyDraft("");
+
+    // Load thread replies
+    try {
+      const { data } = await api.get(`/rfqs/${r._id}/thread`);
+      const replies = data.replies || [];
+      setThreadReplies(replies);
+
+      // Auto re-extract if replies exist
+      if (replies.length > 0) {
+        setReExtracting(true);
+        try {
+          const { data: updated } = await api.post(`/rfqs/${r._id}/re-extract`);
+          if (updated) {
+            setSelected(updated);
+            if (updated.followUpDraft && !showReply) setReplyDraft(updated.followUpDraft);
+          }
+        } catch {}
+        setReExtracting(false);
+        loadRfqs(); // refresh inbox badges
+      }
+    } catch {}
   };
 
   const archiveRfq = async (id: string) => {
@@ -681,8 +705,51 @@ export default function RfqInbox() {
               );
             })()}
 
-            {/* Email body */}
+            {/* Email body + thread replies */}
             <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+              {/* Thread replies (newest first) */}
+              {threadReplies.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  {[...threadReplies].reverse().map((reply: any, i: number) => (
+                    <div key={reply._id || i} style={{
+                      padding: "12px 16px", marginBottom: 8, background: "#f0fdf4",
+                      border: "1px solid #86efac", borderRadius: 8,
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <span className="badge b-ok" style={{ fontSize: 9 }}>
+                          Customer reply{threadReplies.length > 1 ? ` ${threadReplies.length - i}` : ""}
+                        </span>
+                        <span style={{ fontSize: 11, color: "var(--text3)" }}>
+                          {reply.fromName || reply.fromEmail} &middot; {reply.receivedAt ? `${fmtDate(reply.receivedAt)} ${fmtTime(reply.receivedAt)}` : ""}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                        {reply.body || ""}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Original message divider */}
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 12, margin: "16px 0",
+                    color: "var(--text3)", fontSize: 11,
+                  }}>
+                    <div style={{ flex: 1, height: 1, background: "var(--border2)" }} />
+                    <span>Original message</span>
+                    <div style={{ flex: 1, height: 1, background: "var(--border2)" }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Re-extracting indicator */}
+              {reExtracting && (
+                <div style={{ fontSize: 11, color: "var(--accent-dark)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 12, height: 12, border: "2px solid var(--border)", borderTop: "2px solid var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                  Re-extracting with full thread...
+                </div>
+              )}
+
+              {/* Original email body */}
               <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.7, whiteSpace: "pre-wrap", maxWidth: 700 }}>
                 {selected.email?.body || "No email body available."}
               </div>

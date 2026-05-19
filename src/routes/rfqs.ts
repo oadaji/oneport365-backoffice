@@ -134,16 +134,16 @@ router.get("/rfqs/:id/thread", async (req: Request, res: Response) => {
     const originalEmail = await Email.findById(rfq.emailId);
     if (!originalEmail) { res.json([]); return; }
 
-    // Find all replies in thread
-    const thread = await Email.find({
+    // Find replies (not the original)
+    const replies = await Email.find({
       $or: [
-        { _id: originalEmail._id },
         { parentEmailId: originalEmail._id },
-        { inReplyTo: originalEmail.messageId },
+        ...(originalEmail.messageId ? [{ inReplyTo: originalEmail.messageId }] : []),
       ],
+      _id: { $ne: originalEmail._id },
     }).sort({ receivedAt: 1 });
 
-    res.json(thread);
+    res.json({ replies });
   } catch (err) {
     res.status(500).json({ error: "Failed to get thread" });
   }
