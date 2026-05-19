@@ -59,6 +59,9 @@ export default function Rates() {
   const [search, setSearch] = useState("");
   const [equipFilter, setEquipFilter] = useState("");
   const [rateTypeFilter, setRateTypeFilter] = useState("");
+  const [carrierFilter, setCarrierFilter] = useState("");
+  const [origCountryFilter, setOrigCountryFilter] = useState("");
+  const [destCountryFilter, setDestCountryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [modal, setModal] = useState<{ tab: Tab; item: any | null } | null>(null);
   const [formData, setFormData] = useState<any>({});
@@ -94,6 +97,9 @@ export default function Rates() {
         if (!applySearch(text)) return false;
         if (equipFilter && r.equipmentType !== equipFilter) return false;
         if (rateTypeFilter && r.rateType !== rateTypeFilter) return false;
+        if (carrierFilter && !(r.carrier || "").toLowerCase().includes(carrierFilter.toLowerCase())) return false;
+        if (origCountryFilter && !(r.originCountry || "").toLowerCase().includes(origCountryFilter.toLowerCase())) return false;
+        if (destCountryFilter && !(r.destCountry || "").toLowerCase().includes(destCountryFilter.toLowerCase())) return false;
         if (statusFilter) {
           const exp = expiryStatus(r.expiryDate);
           if (statusFilter === "valid" && exp.label) return false;
@@ -110,9 +116,9 @@ export default function Rates() {
       return haulExport.filter(r => applySearch(`${r.terminalName} ${r.originLga || ""} ${r.originCity || ""} ${r.originState || ""}`));
     }
     return other.filter(r => applySearch(`${r.itemName} ${r.itemCategory}`));
-  }, [tab, ocean, haulImport, haulExport, other, search, equipFilter, rateTypeFilter, statusFilter]);
+  }, [tab, ocean, haulImport, haulExport, other, search, equipFilter, rateTypeFilter, carrierFilter, origCountryFilter, destCountryFilter, statusFilter]);
 
-  const clearFilters = () => { setSearch(""); setEquipFilter(""); setRateTypeFilter(""); setStatusFilter(""); };
+  const clearFilters = () => { setSearch(""); setEquipFilter(""); setRateTypeFilter(""); setCarrierFilter(""); setOrigCountryFilter(""); setDestCountryFilter(""); setStatusFilter(""); };
 
   const deleteRate = async (t: Tab, id: string) => {
     if (!window.confirm("Archive this rate?")) return;
@@ -241,6 +247,18 @@ export default function Rates() {
                 <option value="freight_only">Freight only</option>
                 <option value="spot">Spot</option>
               </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", marginBottom: 3 }}>Carrier</div>
+              <input placeholder="e.g. MSC" value={carrierFilter} onChange={e => setCarrierFilter(e.target.value)} style={{ ...inputStyle, width: 120 }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", marginBottom: 3 }}>Origin Country</div>
+              <input placeholder="e.g. Nigeria" value={origCountryFilter} onChange={e => setOrigCountryFilter(e.target.value)} style={{ ...inputStyle, width: 120 }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", marginBottom: 3 }}>Dest Country</div>
+              <input placeholder="e.g. China" value={destCountryFilter} onChange={e => setDestCountryFilter(e.target.value)} style={{ ...inputStyle, width: 120 }} />
             </div>
             <div>
               <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", marginBottom: 3 }}>Status</div>
