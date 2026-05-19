@@ -11,6 +11,7 @@ import { isAutomatedEmail, normaliseMessageId } from "../lib/email-filters";
 import { extractWithClaude, preClassifyEmail } from "../lib/ai-extract";
 import { resolveContact } from "../lib/resolve-contact";
 import { getValidToken, refreshAccessToken } from "../lib/microsoft-oauth";
+import { classifyEmail } from "../lib/classifier";
 import { fetchOutlookShippingEmails, deltaSync as outlookDeltaSync, GraphMessage } from "../lib/outlook-graph";
 import crypto from "crypto";
 
@@ -154,6 +155,13 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
 
             // Skip automated
             if (isAutomatedEmail({ fromEmail, subject, hasListUnsubscribe: false })) {
+              totalSkipped++;
+              continue;
+            }
+
+            // Stage 2: Local classifier
+            const outlookClassification = classifyEmail({ fromEmail, subject, body });
+            if (!outlookClassification.shippingRelevant && !outlookClassification.needsClaude) {
               totalSkipped++;
               continue;
             }
@@ -309,7 +317,17 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
               continue;
             }
 
-            // IMAP SEARCH already filtered for shipping keywords — no need for looksLikeFreight here
+            // Stage 2: Local classifier — score 0-1
+            const classification = classifyEmail({
+              fromEmail, subject,
+              body: typeof body === "string" ? body : "",
+            });
+
+            // Score < 0.4 → definitely not freight, skip without Claude
+            if (!classification.shippingRelevant && !classification.needsClaude) {
+              totalSkipped++;
+              continue;
+            }
 
             // Check if already ingested
             const existing = await Email.findOne({ uid });

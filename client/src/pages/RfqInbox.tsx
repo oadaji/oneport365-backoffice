@@ -441,9 +441,21 @@ export default function RfqInbox() {
 
         <div style={{ flex: 1, overflowY: "auto" }}>
           {loading ? (
-            <div style={{ padding: 20, textAlign: "center", color: "var(--text3)", fontSize: 12 }}>Loading...</div>
+            <div style={{ padding: 30, textAlign: "center", color: "var(--text3)", fontSize: 12 }}>
+              <div style={{ marginBottom: 8 }}>Loading inbox...</div>
+              <div style={{ width: 20, height: 20, border: "2px solid var(--border)", borderTop: "2px solid var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto" }} />
+            </div>
           ) : rfqs.length === 0 ? (
-            <div style={{ padding: 20, textAlign: "center", color: "var(--text3)", fontSize: 12 }}>No RFQs yet</div>
+            <div style={{ padding: 30, textAlign: "center" }}>
+              <div style={{ fontSize: 24, marginBottom: 8 }}>📭</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text2)", marginBottom: 4 }}>No RFQs yet</div>
+              <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 12, lineHeight: 1.5 }}>
+                Connect an inbox and click sync to start processing shipping emails.
+              </div>
+              <button className="btn btn-primary btn-sm" onClick={syncEmails} disabled={syncing}>
+                {syncing ? "Syncing..." : "Sync Now"}
+              </button>
+            </div>
           ) : (
             rfqs.map((r) => {
               const isSelected = selected?._id === r._id;
