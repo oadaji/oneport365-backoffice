@@ -572,7 +572,7 @@ export default function RfqInbox() {
       </div>
 
       {/* ===== RIGHT: EXTRACTION PANEL ===== */}
-      <div style={{ width: 300, borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", background: "var(--surface)", flexShrink: 0, overflow: "hidden" }}>
+      <div style={{ width: 300, borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", background: "var(--surface)", flexShrink: 0, overflow: "hidden", height: "100%" }}>
         {selected ? (
           <>
             {/* Header */}
