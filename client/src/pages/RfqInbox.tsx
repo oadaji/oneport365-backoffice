@@ -519,7 +519,7 @@ export default function RfqInbox() {
               const freightMode = get("freight mode");
               const weight = get("weight");
               const missing = selected.missingFields || [];
-              const okCount = f.filter((x: any) => x.ok).length;
+
 
               // Build summary line
               const modeStr = freightMode?.ok ? (freightMode.v.toLowerCase().includes("air") ? "air freight" : "ocean freight") : "freight";
