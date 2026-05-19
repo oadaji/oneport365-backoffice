@@ -266,7 +266,7 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
               ...(connectMode === "outlook" ? { borderColor: "#0078D4", background: "#e8f0fe", color: "#0078D4" } : {}),
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" fill="#0078D4"/><path d="M1 6l11 7 11-7" fill="none" stroke="#fff" strokeWidth="1.5"/><ellipse cx="8" cy="13" rx="5" ry="6" fill="#0A4E8A"/><ellipse cx="8" cy="13" rx="3.5" ry="4.5" fill="#fff"/></svg>
+            <svg width="20" height="20" viewBox="0 0 21 21"><rect width="10" height="10" fill="#F25022"/><rect x="11" width="10" height="10" fill="#7FBA00"/><rect y="11" width="10" height="10" fill="#00A4EF"/><rect x="11" y="11" width="10" height="10" fill="#FFB900"/></svg>
             Outlook
           </button>
         </div>
