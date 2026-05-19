@@ -145,3 +145,18 @@
 3. Some emails may still slip through if Claude Haiku misclassifies them — Sonnet would be more accurate
 4. Gmail/Outlook logo images use external CDN URLs — may break if CDN is down
 5. `extractForwardedSender()` not yet implemented (Task 13) — @oneport365.com emails show team member as customer
+
+### Task 11: Phase 2 — Microsoft Graph API for Outlook (completed)
+- Created `outlook-graph.ts` with OUTLOOK_SHIPPING_SEARCH (KQL)
+- Server-side `$search` + `$filter` on `/me/mailFolders/inbox/messages`
+- OAuth scopes updated to `Mail.Read` + `User.Read` (no IMAP)
+- Auto-detects Outlook accounts in sync route, uses Graph API
+- Delta sync with deltaLink cursor
+- **Commit:** `bc6e7ae`
+
+### Task 12: Phase 3 — Stage 2 classifier + empty/loading states (completed)
+- Local classifier scores 0-1 (keywords, domains, attachments, promo signals)
+- Score < 0.4 dropped before Claude (saves API cost)
+- Integrated into both Gmail IMAP and Outlook Graph sync
+- Improved empty/loading states — no blank pane
+- **Commit:** `567f970`
