@@ -70,7 +70,7 @@ router.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
 
     // Redirect to frontend settings page
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-    res.redirect(`${frontendUrl}/settings?outlook=connected&email=${encodeURIComponent(tokens.email)}`);
+    res.redirect(`${frontendUrl}/?outlook=connected&email=${encodeURIComponent(tokens.email)}`);
   } catch (err: any) {
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
     res.redirect(`${frontendUrl}/settings?outlook=error&message=${encodeURIComponent(err.message)}`);

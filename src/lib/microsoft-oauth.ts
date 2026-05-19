@@ -7,8 +7,8 @@ const redirectUri =
   "http://localhost:5001/api/auth/microsoft/callback";
 
 const SCOPES = [
-  "https://outlook.office365.com/IMAP.AccessAsUser.All",
-  "https://outlook.office365.com/SMTP.Send",
+  "https://graph.microsoft.com/Mail.Read",
+  "https://graph.microsoft.com/User.Read",
   "offline_access",
   "openid",
   "email",

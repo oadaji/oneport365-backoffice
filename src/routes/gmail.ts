@@ -11,6 +11,7 @@ import { isAutomatedEmail, normaliseMessageId } from "../lib/email-filters";
 import { extractWithClaude, preClassifyEmail } from "../lib/ai-extract";
 import { resolveContact } from "../lib/resolve-contact";
 import { getValidToken, refreshAccessToken } from "../lib/microsoft-oauth";
+import { fetchOutlookShippingEmails, deltaSync as outlookDeltaSync, GraphMessage } from "../lib/outlook-graph";
 import crypto from "crypto";
 
 const router = Router();
@@ -130,6 +131,107 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
       // Clear error and update sync time at start
       await EmailAccount.findByIdAndUpdate(account.id, { lastError: null, lastSyncedAt: new Date() });
 
+      // ── Outlook Graph API sync ──
+      if (account.authType === "oauth2" && account.provider === "outlook") {
+        const dbAccount = await EmailAccount.findById(account.id);
+        if (!dbAccount?.refreshToken) { errors.push(`${account.email}: No refresh token`); continue; }
+
+        const graphMessages = await fetchOutlookShippingEmails(dbAccount, { maxMessages: 100 });
+
+        for (const gMsg of graphMessages) {
+          try {
+            const fromEmail = gMsg.from?.emailAddress?.address?.toLowerCase() || "";
+            const fromName = gMsg.from?.emailAddress?.name || fromEmail;
+            const subject = gMsg.subject || "(no subject)";
+            let body = gMsg.body?.content || gMsg.bodyPreview || "";
+            if (gMsg.body?.contentType === "html") {
+              body = body.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+            }
+            if (body.length > 15000) body = body.slice(0, 15000);
+
+            const uid = `graph:${gMsg.id}`;
+            const cc = gMsg.ccRecipients?.map((r) => r.emailAddress.address).join(", ") || null;
+
+            // Skip automated
+            if (isAutomatedEmail({ fromEmail, subject, hasListUnsubscribe: false })) {
+              totalSkipped++;
+              continue;
+            }
+
+            // Already ingested?
+            const existing = await Email.findOne({ uid });
+            if (existing) { totalSkipped++; continue; }
+
+            // Claude extraction
+            const extraction = await extractWithClaude(
+              { fromName, fromEmail, subject, body },
+              "customer-rfq"
+            );
+
+            const resolvedType = extraction.detectedEmailType || "irrelevant";
+            if (resolvedType !== "customer-rfq" && resolvedType !== "internal-rfq" && resolvedType !== "rate-reply") {
+              totalSkipped++;
+              continue;
+            }
+            if (!extraction.shipments || extraction.shipments.length === 0) {
+              totalSkipped++;
+              continue;
+            }
+
+            // Create CRM contact + email + RFQs
+            const crm = await resolveContact({ email: fromEmail, name: fromName, source: "email" });
+
+            const emailDoc = await Email.create({
+              uid, fromName, fromEmail, subject,
+              body, emailType: resolvedType,
+              receivedAt: new Date(gMsg.receivedDateTime),
+              messageId: gMsg.id,
+              cc: cc || undefined,
+              receivedInbox: account.label || account.email,
+              contactId: crm.contactId,
+            });
+
+            const isGroup = extraction.shipments.length > 1;
+            const groupId = isGroup ? crypto.randomUUID() : undefined;
+
+            for (let idx = 0; idx < extraction.shipments.length; idx++) {
+              const s = extraction.shipments[idx];
+              await Rfq.create({
+                emailId: emailDoc._id,
+                ref: generateRef(),
+                emailType: resolvedType,
+                status: s.status as any,
+                fields: s.fields,
+                missingFields: s.missing,
+                followUpDraft: (isGroup ? (idx === 0 ? extraction.combinedDraft : undefined) : (extraction.combinedDraft || s.draft)) || undefined,
+                groupId,
+                groupIndex: isGroup ? idx + 1 : undefined,
+                groupTotal: isGroup ? extraction.shipments.length : undefined,
+                sourceMessageId: gMsg.id,
+                companyId: crm.companyId || undefined,
+                contactId: crm.contactId,
+              });
+            }
+
+            totalSynced++;
+          } catch (msgErr) {
+            console.error("Error processing Outlook message:", msgErr);
+          }
+        }
+
+        // Update cursor for delta sync
+        try {
+          const delta = await outlookDeltaSync(dbAccount);
+          if (delta.newCursor) {
+            await EmailAccount.findByIdAndUpdate(account.id, { cursor: delta.newCursor });
+          }
+        } catch { /* delta cursor save is best-effort */ }
+
+        await EmailAccount.findByIdAndUpdate(account.id, { lastSyncedAt: new Date(), lastError: null });
+        continue; // Skip IMAP processing
+      }
+
+      // ── Gmail IMAP sync ──
       const client = createImapClient(account);
 
       client.on("error", () => {});
