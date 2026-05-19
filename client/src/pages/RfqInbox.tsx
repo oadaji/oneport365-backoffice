@@ -385,6 +385,24 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
 
 const QUOTE_REQUIRED = ["Company", "Customer", "Email", "Commodity", "HS Code", "Weight", "Volume", "POL", "POD", "Container"];
 
+/**
+ * Layer 3 of @oneport365.com rule: If email is from an internal address,
+ * extract the external customer from the body. Used for inbox display,
+ * email header, and compose To field.
+ */
+function effectiveSender(rfq: Rfq): { name: string; email: string } {
+  const em = rfq.email;
+  if (!em) return { name: "Unknown", email: "" };
+  if (em.fromEmail?.toLowerCase().endsWith("@oneport365.com")) {
+    const match = em.body?.match(
+      /From:\s*([^<\n\r]+?)\s*<([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>/i
+    );
+    if (match && !match[2].toLowerCase().endsWith("@oneport365.com"))
+      return { name: match[1].trim(), email: match[2].toLowerCase() };
+  }
+  return { name: em.fromName || em.fromEmail, email: em.fromEmail };
+}
+
 function fieldVal(fields: { k: string; v: string; ok: boolean }[], key: string): string {
   const f = fields.find((x) => x.k.toLowerCase().includes(key.toLowerCase()));
   return f?.v && f.v !== "not specified" ? f.v : "";
@@ -588,7 +606,7 @@ export default function RfqInbox() {
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 2 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>
-                      {r.email?.fromName || r.email?.fromEmail || "Unknown"}
+                      {effectiveSender(r).name}
                     </div>
                     <div style={{ fontSize: 10, color: "var(--text3)", flexShrink: 0 }}>
                       {r.email?.receivedAt ? fmtDate(r.email.receivedAt) : ""}
@@ -620,7 +638,7 @@ export default function RfqInbox() {
                 {selected.email?.subject || "No subject"}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                <span style={{ color: "var(--text2)", fontWeight: 500 }}>{selected.email?.fromName}</span>
+                <span style={{ color: "var(--text2)", fontWeight: 500 }}>{effectiveSender(selected).name}</span>
                 <span className="badge b-rate">Customer RFQ</span>
                 {selected.status === "info_needed" && <span className="badge b-miss">Missing info</span>}
                 {selected.status === "ready" && <span className="badge b-ok">Ready</span>}
@@ -765,7 +783,7 @@ export default function RfqInbox() {
                   <button onClick={() => setShowReply(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--text3)" }}>×</button>
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600 }}>TO</span>&nbsp;&nbsp;{selected.email?.fromEmail}
+                  <span style={{ fontWeight: 600 }}>TO</span>&nbsp;&nbsp;{effectiveSender(selected).email}
                 </div>
                 <textarea
                   value={replyDraft}

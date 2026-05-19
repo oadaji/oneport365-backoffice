@@ -17,6 +17,41 @@ import crypto from "crypto";
 
 const router = Router();
 
+/**
+ * Layer 1 of @oneport365.com rule: If the email is from an internal
+ * @oneport365.com address, scan the body for the original external sender.
+ * Patterns matched:
+ *   From: Name <ext@domain.com>
+ *   From: Name [mailto:ext@domain.com]
+ */
+function extractForwardedSender(
+  fromEmail: string,
+  fromName: string,
+  body: string
+): { fromEmail: string; fromName: string } {
+  if (!fromEmail.toLowerCase().endsWith("@oneport365.com")) {
+    return { fromEmail, fromName };
+  }
+
+  // Pattern 1: From: Name <email@domain.com>
+  const angleMatch = body.match(
+    /From:\s*([^<\n\r]+?)\s*<([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>/i
+  );
+  if (angleMatch && !angleMatch[2].toLowerCase().endsWith("@oneport365.com")) {
+    return { fromName: angleMatch[1].trim(), fromEmail: angleMatch[2].toLowerCase() };
+  }
+
+  // Pattern 2: From: Name [mailto:email@domain.com]
+  const mailtoMatch = body.match(
+    /From:\s*([^[\n\r]+?)\s*\[mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\]/i
+  );
+  if (mailtoMatch && !mailtoMatch[2].toLowerCase().endsWith("@oneport365.com")) {
+    return { fromName: mailtoMatch[1].trim(), fromEmail: mailtoMatch[2].toLowerCase() };
+  }
+
+  return { fromEmail, fromName };
+}
+
 function generateRef(): string {
   const now = new Date();
   const yymm = String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, "0");
@@ -141,14 +176,17 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
 
         for (const gMsg of graphMessages) {
           try {
-            const fromEmail = gMsg.from?.emailAddress?.address?.toLowerCase() || "";
-            const fromName = gMsg.from?.emailAddress?.name || fromEmail;
+            const rawOlkFromEmail = gMsg.from?.emailAddress?.address?.toLowerCase() || "";
+            const rawOlkFromName = gMsg.from?.emailAddress?.name || rawOlkFromEmail;
             const subject = gMsg.subject || "(no subject)";
             let body = gMsg.body?.content || gMsg.bodyPreview || "";
             if (gMsg.body?.contentType === "html") {
               body = body.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
             }
             if (body.length > 15000) body = body.slice(0, 15000);
+
+            // Layer 1: Replace @oneport365.com sender with forwarded external sender
+            const { fromEmail, fromName } = extractForwardedSender(rawOlkFromEmail, rawOlkFromName, body);
 
             const uid = `graph:${gMsg.id}`;
             const cc = gMsg.ccRecipients?.map((r) => r.emailAddress.address).join(", ") || null;
@@ -290,8 +328,8 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
             const fromAddr = parsed.from?.value?.[0];
             if (!fromAddr?.address) continue;
 
-            const fromEmail = fromAddr.address.toLowerCase();
-            const fromName = fromAddr.name || fromEmail;
+            const rawFromEmail = fromAddr.address.toLowerCase();
+            const rawFromName = fromAddr.name || rawFromEmail;
             const subject = parsed.subject || "(no subject)";
             // Prefer plain text, fall back to stripped HTML. For forwarded emails,
             // the original content is often only in HTML — strip tags and use it.
@@ -303,6 +341,10 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
             }
             // Truncate to 15000 chars to match extraction limit
             if (typeof body === "string" && body.length > 15000) body = body.slice(0, 15000);
+
+            // Layer 1: Replace @oneport365.com sender with forwarded external sender
+            const { fromEmail, fromName } = extractForwardedSender(rawFromEmail, rawFromName, body);
+
             const messageId = normaliseMessageId(parsed.messageId);
             const inReplyTo = normaliseMessageId(parsed.inReplyTo as string);
             const cc = parsed.cc ? (Array.isArray(parsed.cc) ? parsed.cc : [parsed.cc]).map((c) => c.text).join(", ") : null;

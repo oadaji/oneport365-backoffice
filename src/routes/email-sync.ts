@@ -9,6 +9,33 @@ import crypto from "crypto";
 
 const router = Router();
 
+/**
+ * Layer 1 of @oneport365.com rule: If the email is from an internal
+ * @oneport365.com address, scan the body for the original external sender.
+ */
+function extractForwardedSender(
+  fromEmail: string,
+  fromName: string,
+  body: string
+): { fromEmail: string; fromName: string } {
+  if (!fromEmail.toLowerCase().endsWith("@oneport365.com")) {
+    return { fromEmail, fromName };
+  }
+  const angleMatch = body.match(
+    /From:\s*([^<\n\r]+?)\s*<([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>/i
+  );
+  if (angleMatch && !angleMatch[2].toLowerCase().endsWith("@oneport365.com")) {
+    return { fromName: angleMatch[1].trim(), fromEmail: angleMatch[2].toLowerCase() };
+  }
+  const mailtoMatch = body.match(
+    /From:\s*([^[\n\r]+?)\s*\[mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\]/i
+  );
+  if (mailtoMatch && !mailtoMatch[2].toLowerCase().endsWith("@oneport365.com")) {
+    return { fromName: mailtoMatch[1].trim(), fromEmail: mailtoMatch[2].toLowerCase() };
+  }
+  return { fromEmail, fromName };
+}
+
 function generateRef(): string {
   const now = new Date();
   const yymm = String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, "0");
@@ -34,10 +61,15 @@ async function processThread(
     .map((m) => `From: ${m.from} <${m.fromEmail}>\nDate: ${m.sentAt.toISOString()}\nSubject: ${m.subject}\n\n${m.bodyText}`)
     .join("\n\n──────────────\n\n");
 
+  // Layer 1: Replace @oneport365.com sender with forwarded external sender
+  const resolved = extractForwardedSender(firstMsg.fromEmail, firstMsg.from, threadText);
+  const effectiveFromEmail = resolved.fromEmail;
+  const effectiveFromName = resolved.fromName;
+
   // Pre-classify
   const preClass = preClassifyEmail({
-    fromName: firstMsg.from,
-    fromEmail: firstMsg.fromEmail,
+    fromName: effectiveFromName,
+    fromEmail: effectiveFromEmail,
     subject: thread.subject,
     body: threadText.slice(0, 3000),
   });
@@ -49,8 +81,8 @@ async function processThread(
   // Claude extraction on full thread (one call per thread, not per message)
   const extraction = await extractWithClaude(
     {
-      fromName: firstMsg.from,
-      fromEmail: firstMsg.fromEmail,
+      fromName: effectiveFromName,
+      fromEmail: effectiveFromEmail,
       subject: thread.subject,
       body: threadText,
     },
@@ -70,18 +102,18 @@ async function processThread(
     return { synced: false, skipped: true };
   }
 
-  // Confirmed freight RFQ — create CRM contact
+  // Confirmed freight RFQ — create CRM contact (use effective sender, not internal)
   const crm = await resolveContact({
-    email: firstMsg.fromEmail,
-    name: firstMsg.from,
+    email: effectiveFromEmail,
+    name: effectiveFromName,
     source: "email",
   });
 
   // Save the email (thread-level record)
   const emailDoc = await Email.create({
     uid,
-    fromName: firstMsg.from,
-    fromEmail: firstMsg.fromEmail,
+    fromName: effectiveFromName,
+    fromEmail: effectiveFromEmail,
     subject: thread.subject,
     body: threadText,
     emailType: resolvedType,
