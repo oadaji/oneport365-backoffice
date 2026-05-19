@@ -5,7 +5,7 @@ import { Email } from "../models/email";
 import { Rfq } from "../models/rfq";
 import { Quote } from "../models/quote";
 import { Partner } from "../models/partner";
-import { OceanFreightRate, HaulageImportRate, OtherCharge } from "../models/rate";
+import { OceanFreightRate, HaulageImportRate, HaulageExportRate, OtherCharge } from "../models/rate";
 
 const router = Router();
 
@@ -168,36 +168,138 @@ router.post("/seed", async (_req: Request, res: Response) => {
 
     // ── Ocean Freight Rates ──────────────────────────────────────
     await OceanFreightRate.insertMany([
+      // China → Nigeria
       { carrier: "MSC", polCode: "CNSHA", podCode: "NGAPP", originCountry: "China", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1850, amount40ft: 2950, amount40hc: 3100, expiryDate: new Date("2026-06-30"), transitTime: "35-40 days", freeTime: "14 days" },
       { carrier: "MSC", polCode: "CNSHA", podCode: "NGTCN", originCountry: "China", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1900, amount40ft: 3000, amount40hc: 3150, expiryDate: new Date("2026-06-30"), transitTime: "35-40 days", freeTime: "14 days" },
       { carrier: "Maersk", polCode: "CNSHA", podCode: "NGAPP", originCountry: "China", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 2100, amount40ft: 3400, amount40hc: 3550, expiryDate: new Date("2026-06-15"), transitTime: "32-35 days", freeTime: "14 days" },
       { carrier: "CMA CGM", polCode: "CNSHA", podCode: "NGAPP", originCountry: "China", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1950, amount40ft: 3100, amount40hc: 3250, expiryDate: new Date("2026-06-20"), transitTime: "33-38 days", freeTime: "14 days" },
+      { carrier: "COSCO", polCode: "CNTAO", podCode: "NGAPP", originCountry: "China", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1750, amount40ft: 2800, amount40hc: 2950, expiryDate: new Date("2026-06-30"), transitTime: "36-42 days", freeTime: "14 days" },
+      { carrier: "COSCO", polCode: "CNNGB", podCode: "NGAPP", originCountry: "China", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1800, amount40ft: 2900, amount40hc: 3050, expiryDate: new Date("2026-07-15"), transitTime: "34-38 days", freeTime: "14 days" },
+      { carrier: "PIL", polCode: "CNYTN", podCode: "NGAPP", originCountry: "China", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "freight_only", currency: "USD", amount20ft: 1650, amount40ft: 2650, amount40hc: 2800, expiryDate: new Date("2026-07-31"), transitTime: "38-44 days", freeTime: "14 days" },
+      { carrier: "Maersk", polCode: "CNTAO", podCode: "NGTCN", originCountry: "China", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 2050, amount40ft: 3300, amount40hc: 3450, expiryDate: new Date("2026-06-15"), transitTime: "34-38 days", freeTime: "14 days" },
+      // Europe → Nigeria
       { carrier: "Hapag-Lloyd", polCode: "DEHAM", podCode: "NGAPP", originCountry: "Germany", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1600, amount40ft: 2600, amount40hc: 2750, expiryDate: new Date("2026-06-30"), transitTime: "21-25 days", freeTime: "14 days" },
       { carrier: "MSC", polCode: "NLRTM", podCode: "NGAPP", originCountry: "Netherlands", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1550, amount40ft: 2500, amount40hc: 2650, expiryDate: new Date("2026-06-30"), transitTime: "18-22 days", freeTime: "14 days" },
-      { carrier: "CMA CGM", polCode: "TRIST", podCode: "NGAPP", originCountry: "Turkey", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1400, amount40ft: 2200, amount40hc: 2350, expiryDate: new Date("2026-06-25"), transitTime: "14-18 days", freeTime: "14 days" },
+      { carrier: "MSC", polCode: "NLRTM", podCode: "NGONE", originCountry: "Netherlands", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1700, amount40ft: 2750, amount40hc: 2900, expiryDate: new Date("2026-07-15"), transitTime: "22-26 days", freeTime: "14 days" },
+      { carrier: "Hapag-Lloyd", polCode: "BEANR", podCode: "NGAPP", originCountry: "Belgium", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1580, amount40ft: 2550, amount40hc: 2700, expiryDate: new Date("2026-07-31"), transitTime: "19-23 days", freeTime: "14 days" },
       { carrier: "Maersk", polCode: "GBFXT", podCode: "NGAPP", originCountry: "UK", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1700, amount40ft: 2800, amount40hc: 2950, expiryDate: new Date("2026-06-15"), transitTime: "16-20 days", freeTime: "14 days" },
-      { carrier: "COSCO", polCode: "CNTAO", podCode: "NGAPP", originCountry: "China", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1750, amount40ft: 2800, amount40hc: 2950, expiryDate: new Date("2026-06-30"), transitTime: "36-42 days", freeTime: "14 days" },
+      { carrier: "Maersk", polCode: "GBFXT", podCode: "NGWAR", originCountry: "UK", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1850, amount40ft: 3000, amount40hc: 3150, expiryDate: new Date("2026-06-15"), transitTime: "20-24 days", freeTime: "14 days" },
+      // Turkey → Nigeria
+      { carrier: "CMA CGM", polCode: "TRIST", podCode: "NGAPP", originCountry: "Turkey", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1400, amount40ft: 2200, amount40hc: 2350, expiryDate: new Date("2026-06-25"), transitTime: "14-18 days", freeTime: "14 days" },
+      { carrier: "MSC", polCode: "TRIST", podCode: "NGAPP", originCountry: "Turkey", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1350, amount40ft: 2150, amount40hc: 2300, expiryDate: new Date("2026-07-20"), transitTime: "15-19 days", freeTime: "14 days" },
+      { carrier: "Hapag-Lloyd", polCode: "TRIST", podCode: "NGTCN", originCountry: "Turkey", destCountry: "Nigeria", commodityType: "DG", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1800, amount40ft: 2900, amount40hc: 3100, expiryDate: new Date("2026-06-30"), transitTime: "15-20 days", freeTime: "14 days" },
+      // India → Nigeria
       { carrier: "PIL", polCode: "INNSZ", podCode: "NGAPP", originCountry: "India", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1300, amount40ft: 2100, amount40hc: 2250, expiryDate: new Date("2026-06-30"), transitTime: "20-25 days", freeTime: "14 days" },
+      { carrier: "MSC", polCode: "INMUN", podCode: "NGAPP", originCountry: "India", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1350, amount40ft: 2200, amount40hc: 2350, expiryDate: new Date("2026-07-15"), transitTime: "22-28 days", freeTime: "14 days" },
+      // Middle East → Nigeria
+      { carrier: "MSC", polCode: "AEJEA", podCode: "NGAPP", originCountry: "UAE", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1200, amount40ft: 1950, amount40hc: 2100, expiryDate: new Date("2026-07-31"), transitTime: "18-22 days", freeTime: "14 days" },
+      { carrier: "CMA CGM", polCode: "AEJEA", podCode: "NGTCN", originCountry: "UAE", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1250, amount40ft: 2000, amount40hc: 2150, expiryDate: new Date("2026-07-15"), transitTime: "19-24 days", freeTime: "14 days" },
+      // West Africa regional
+      { carrier: "PIL", polCode: "GHTEM", podCode: "NGAPP", originCountry: "Ghana", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 650, amount40ft: 1050, amount40hc: 1150, expiryDate: new Date("2026-08-31"), transitTime: "5-7 days", freeTime: "7 days" },
+      // East Africa
+      { carrier: "MSC", polCode: "KEMBA", podCode: "NGAPP", originCountry: "Kenya", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1450, amount40ft: 2350, amount40hc: 2500, expiryDate: new Date("2026-07-31"), transitTime: "25-30 days", freeTime: "14 days" },
+      // Singapore → Nigeria
+      { carrier: "PIL", polCode: "SGSIN", podCode: "NGAPP", originCountry: "Singapore", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "all_in", currency: "USD", amount20ft: 1500, amount40ft: 2400, amount40hc: 2550, expiryDate: new Date("2026-07-15"), transitTime: "28-33 days", freeTime: "14 days" },
+      // Spot rates (shorter validity)
+      { carrier: "MSC", polCode: "CNSHA", podCode: "NGAPP", originCountry: "China", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "spot", currency: "USD", amount20ft: 1700, amount40ft: 2750, amount40hc: 2900, expiryDate: new Date("2026-05-31"), transitTime: "35-40 days", freeTime: "7 days" },
+      { carrier: "Maersk", polCode: "NLRTM", podCode: "NGAPP", originCountry: "Netherlands", destCountry: "Nigeria", commodityType: "general", equipmentType: "40ft", rateType: "spot", currency: "USD", amount20ft: 1400, amount40ft: 2300, amount40hc: 2450, expiryDate: new Date("2026-05-28"), transitTime: "18-22 days", freeTime: "7 days" },
     ]);
 
-    // ── Haulage Rates ──────────────────────────────────────────
+    // ── Haulage Import Rates (NGN) ──────────────────────────────
     await HaulageImportRate.insertMany([
+      // APM Terminals Apapa → various Lagos destinations
       { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Ikeja", destState: "Lagos", destCity: "Lagos", currency: "NGN", price: 450000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Ikeja", destState: "Lagos", destCity: "Lagos", currency: "NGN", price: 320000, shipmentType: "fcl", equipmentType: "20ft" },
       { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Victoria Island", destState: "Lagos", destCity: "Lagos", currency: "NGN", price: 380000, shipmentType: "fcl", equipmentType: "20ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Victoria Island", destState: "Lagos", destCity: "Lagos", currency: "NGN", price: 520000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Ikorodu", destState: "Lagos", destCity: "Lagos", currency: "NGN", price: 550000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Lekki", destState: "Lagos", destCity: "Lagos", currency: "NGN", price: 580000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Ajah", destState: "Lagos", destCity: "Lagos", currency: "NGN", price: 620000, shipmentType: "fcl", equipmentType: "40ft" },
+      // APM Terminals Apapa → outside Lagos
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Sagamu", destState: "Ogun", destCity: "Sagamu", currency: "NGN", price: 750000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Ota", destState: "Ogun", destCity: "Ota", currency: "NGN", price: 680000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Ibadan North", destState: "Oyo", destCity: "Ibadan", currency: "NGN", price: 950000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Aba South", destState: "Abia", destCity: "Aba", currency: "NGN", price: 1800000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Onitsha North", destState: "Anambra", destCity: "Onitsha", currency: "NGN", price: 1650000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Kano Municipal", destState: "Kano", destCity: "Kano", currency: "NGN", price: 2800000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", destLga: "Abuja Municipal", destState: "FCT", destCity: "Abuja", currency: "NGN", price: 2200000, shipmentType: "fcl", equipmentType: "40ft" },
+      // Tin Can Island
       { terminalName: "Tin Can Island", portCode: "NGTCN", destLga: "Apapa", destState: "Lagos", destCity: "Lagos", currency: "NGN", price: 320000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Tin Can Island", portCode: "NGTCN", destLga: "Ikeja", destState: "Lagos", destCity: "Lagos", currency: "NGN", price: 480000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Tin Can Island", portCode: "NGTCN", destLga: "Ikorodu", destState: "Lagos", destCity: "Lagos", currency: "NGN", price: 580000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Tin Can Island", portCode: "NGTCN", destLga: "Sagamu", destState: "Ogun", destCity: "Sagamu", currency: "NGN", price: 780000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Tin Can Island", portCode: "NGTCN", destLga: "Abuja Municipal", destState: "FCT", destCity: "Abuja", currency: "NGN", price: 2350000, shipmentType: "fcl", equipmentType: "40ft" },
+      // Onne Port
       { terminalName: "Onne Port", portCode: "NGONE", destLga: "Trans Amadi", destState: "Rivers", destCity: "Port Harcourt", currency: "NGN", price: 280000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Onne Port", portCode: "NGONE", destLga: "Port Harcourt City", destState: "Rivers", destCity: "Port Harcourt", currency: "NGN", price: 350000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Onne Port", portCode: "NGONE", destLga: "Aba South", destState: "Abia", destCity: "Aba", currency: "NGN", price: 550000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Onne Port", portCode: "NGONE", destLga: "Onitsha North", destState: "Anambra", destCity: "Onitsha", currency: "NGN", price: 850000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Onne Port", portCode: "NGONE", destLga: "Enugu North", destState: "Enugu", destCity: "Enugu", currency: "NGN", price: 750000, shipmentType: "fcl", equipmentType: "40ft" },
+      // Warri Port
+      { terminalName: "Warri Port", portCode: "NGWAR", destLga: "Warri South", destState: "Delta", destCity: "Warri", currency: "NGN", price: 250000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Warri Port", portCode: "NGWAR", destLga: "Benin City", destState: "Edo", destCity: "Benin", currency: "NGN", price: 550000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Warri Port", portCode: "NGWAR", destLga: "Asaba", destState: "Delta", destCity: "Asaba", currency: "NGN", price: 450000, shipmentType: "fcl", equipmentType: "40ft" },
+    ]);
+
+    // ── Haulage Export Rates (NGN) ──────────────────────────────
+    await HaulageExportRate.insertMany([
+      // Lagos origins → Apapa
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", originLga: "Ikeja", originState: "Lagos", originCity: "Lagos", currency: "NGN", price: 420000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", originLga: "Ikeja", originState: "Lagos", originCity: "Lagos", currency: "NGN", price: 300000, shipmentType: "fcl", equipmentType: "20ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", originLga: "Lekki", originState: "Lagos", originCity: "Lagos", currency: "NGN", price: 550000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", originLga: "Ikorodu", originState: "Lagos", originCity: "Lagos", currency: "NGN", price: 520000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", originLga: "Victoria Island", originState: "Lagos", originCity: "Lagos", currency: "NGN", price: 480000, shipmentType: "fcl", equipmentType: "40ft" },
+      // Outside Lagos → Apapa
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", originLga: "Ota", originState: "Ogun", originCity: "Ota", currency: "NGN", price: 650000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", originLga: "Sagamu", originState: "Ogun", originCity: "Sagamu", currency: "NGN", price: 720000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", originLga: "Ibadan North", originState: "Oyo", originCity: "Ibadan", currency: "NGN", price: 900000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", originLga: "Onitsha North", originState: "Anambra", originCity: "Onitsha", currency: "NGN", price: 1600000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", originLga: "Abuja Municipal", originState: "FCT", originCity: "Abuja", currency: "NGN", price: 2100000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "APM Terminals Apapa", portCode: "NGAPP", originLga: "Kano Municipal", originState: "Kano", originCity: "Kano", currency: "NGN", price: 2700000, shipmentType: "fcl", equipmentType: "40ft" },
+      // Lagos origins → Tin Can
+      { terminalName: "Tin Can Island", portCode: "NGTCN", originLga: "Ikeja", originState: "Lagos", originCity: "Lagos", currency: "NGN", price: 450000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Tin Can Island", portCode: "NGTCN", originLga: "Ikorodu", originState: "Lagos", originCity: "Lagos", currency: "NGN", price: 550000, shipmentType: "fcl", equipmentType: "40ft" },
+      // Origins → Onne
+      { terminalName: "Onne Port", portCode: "NGONE", originLga: "Trans Amadi", originState: "Rivers", originCity: "Port Harcourt", currency: "NGN", price: 260000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Onne Port", portCode: "NGONE", originLga: "Aba South", originState: "Abia", originCity: "Aba", currency: "NGN", price: 500000, shipmentType: "fcl", equipmentType: "40ft" },
+      { terminalName: "Onne Port", portCode: "NGONE", originLga: "Enugu North", originState: "Enugu", originCity: "Enugu", currency: "NGN", price: 700000, shipmentType: "fcl", equipmentType: "40ft" },
     ]);
 
     // ── Other Charges ──────────────────────────────────────────
     await OtherCharge.insertMany([
+      // Origin charges (USD)
       { itemName: "Terminal Handling (Origin)", itemCategory: "Origin", shipmentType: "fcl", currency: "USD", price: 185 },
+      { itemName: "Container Loading/Stuffing", itemCategory: "Origin", shipmentType: "fcl", currency: "USD", price: 120 },
+      { itemName: "Export Customs Documentation", itemCategory: "Origin", shipmentType: "both", currency: "USD", price: 95 },
+      { itemName: "Container Seal", itemCategory: "Origin", shipmentType: "fcl", currency: "USD", price: 15 },
+      // Freight surcharges (USD)
+      { itemName: "Bunker Adjustment Factor (BAF)", itemCategory: "Freight", shipmentType: "fcl", currency: "USD", price: 350 },
+      { itemName: "Currency Adjustment Factor (CAF)", itemCategory: "Freight", shipmentType: "fcl", currency: "USD", price: 75 },
+      { itemName: "Peak Season Surcharge", itemCategory: "Freight", shipmentType: "fcl", currency: "USD", price: 200 },
+      { itemName: "War Risk Surcharge", itemCategory: "Freight", shipmentType: "both", currency: "USD", price: 45 },
+      { itemName: "Low Sulphur Surcharge", itemCategory: "Freight", shipmentType: "both", currency: "USD", price: 85 },
+      { itemName: "IMO DG Surcharge", itemCategory: "Freight", shipmentType: "fcl", currency: "USD", price: 450 },
+      // Destination charges (USD)
       { itemName: "Terminal Handling (Dest)", itemCategory: "Destination", shipmentType: "fcl", currency: "USD", price: 250 },
       { itemName: "Bill of Lading Fee", itemCategory: "Documentation", shipmentType: "both", currency: "USD", price: 75 },
+      { itemName: "Telex Release Fee", itemCategory: "Documentation", shipmentType: "both", currency: "USD", price: 50 },
+      // Destination charges (NGN)
       { itemName: "Customs Clearance", itemCategory: "Destination", shipmentType: "fcl", currency: "NGN", price: 185000 },
       { itemName: "NAFDAC Clearance", itemCategory: "Destination", shipmentType: "both", currency: "NGN", price: 120000 },
       { itemName: "SON Assessment", itemCategory: "Destination", shipmentType: "both", currency: "NGN", price: 95000 },
       { itemName: "Shipping Line DO", itemCategory: "Destination", shipmentType: "fcl", currency: "NGN", price: 150000 },
       { itemName: "Agency Fee", itemCategory: "Destination", shipmentType: "both", currency: "NGN", price: 75000 },
+      { itemName: "Terminal Delivery Order", itemCategory: "Destination", shipmentType: "fcl", currency: "NGN", price: 85000 },
+      { itemName: "Container Deposit (refundable)", itemCategory: "Destination", shipmentType: "fcl", currency: "NGN", price: 500000 },
+      { itemName: "Duty Processing Fee", itemCategory: "Destination", shipmentType: "both", currency: "NGN", price: 65000 },
+      { itemName: "Port Charges / PAAR", itemCategory: "Destination", shipmentType: "fcl", currency: "NGN", price: 110000 },
+      { itemName: "Customs Examination Fee", itemCategory: "Destination", shipmentType: "fcl", currency: "NGN", price: 45000 },
+      { itemName: "NPA Charges", itemCategory: "Destination", shipmentType: "fcl", currency: "NGN", price: 35000 },
+      { itemName: "Gate Pass / Exit Fee", itemCategory: "Destination", shipmentType: "fcl", currency: "NGN", price: 25000 },
+      // Insurance & miscellaneous
+      { itemName: "Marine Cargo Insurance", itemCategory: "Insurance", shipmentType: "both", currency: "USD", price: 0, asPerReceipt: true },
+      { itemName: "Demurrage (per day)", itemCategory: "Penalty", shipmentType: "fcl", currency: "NGN", price: 180000 },
+      { itemName: "Storage (per day)", itemCategory: "Penalty", shipmentType: "fcl", currency: "NGN", price: 95000 },
     ]);
 
     // ── Quotes ──────────────────────────────────────────────
@@ -219,7 +321,7 @@ router.post("/seed", async (_req: Request, res: Response) => {
       },
     ]);
 
-    res.json({ success: true, message: "Seed data created", counts: { companies: companies.length, contacts: contacts.length, emails: emails.length, rfqs: 7, partners: 7, rates: 10, quotes: 3 } });
+    res.json({ success: true, message: "Seed data created", counts: { companies: companies.length, contacts: contacts.length, emails: emails.length, rfqs: 7, partners: 7, oceanRates: 26, haulageImport: 27, haulageExport: 16, otherCharges: 28, quotes: 3 } });
   } catch (err: any) {
     if (err.code === 11000) {
       res.json({ success: true, message: "Seed data already exists (duplicate key)" });
@@ -235,7 +337,7 @@ router.post("/seed/reset", async (_req: Request, res: Response) => {
     await Promise.all([
       Company.deleteMany({}), Contact.deleteMany({}), Email.deleteMany({}),
       Rfq.deleteMany({}), Quote.deleteMany({}), Partner.deleteMany({}),
-      OceanFreightRate.deleteMany({}), HaulageImportRate.deleteMany({}), OtherCharge.deleteMany({}),
+      OceanFreightRate.deleteMany({}), HaulageImportRate.deleteMany({}), HaulageExportRate.deleteMany({}), OtherCharge.deleteMany({}),
     ]);
     res.json({ success: true, message: "All data cleared" });
   } catch (err) {
