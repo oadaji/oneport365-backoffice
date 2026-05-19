@@ -44,11 +44,13 @@ function timeSince(dateStr: string): string {
 function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
   const [accounts, setAccounts] = useState<EmailAccount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [connectMode, setConnectMode] = useState<"" | "gmail">("");
+  const [connectMode, setConnectMode] = useState<"" | "gmail" | "outlook">("");
   const [gmailForm, setGmailForm] = useState({ email: "", password: "" });
+  const [sharedEmail, setSharedEmail] = useState("");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [redirectUri, setRedirectUri] = useState("");
 
   const fetchAccounts = async () => {
     try {
@@ -61,7 +63,10 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
     }
   };
 
-  useEffect(() => { fetchAccounts(); }, []);
+  useEffect(() => {
+    fetchAccounts();
+    api.get("/email-accounts/oauth/redirect-uri").then(({ data }) => setRedirectUri(data.redirectUri)).catch(() => {});
+  }, []);
 
   const removeAccount = async (acc: EmailAccount) => {
     const id = acc._id || acc.id;
@@ -110,9 +115,24 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const connectOutlook = (shared = false) => {
+  const connectOutlook = () => {
     const baseUrl = process.env.REACT_APP_API_URL || "http://localhost:5001/api";
-    window.location.href = `${baseUrl}/auth/microsoft${shared ? "?shared=true" : ""}`;
+    window.location.href = `${baseUrl}/auth/microsoft`;
+  };
+
+  const connectSharedMailbox = async () => {
+    if (!sharedEmail) return;
+    setSaving(true);
+    try {
+      await api.post("/email-accounts/shared", { email: sharedEmail, label: sharedEmail });
+      setSharedEmail("");
+      setConnectMode("");
+      await fetchAccounts();
+    } catch (err: any) {
+      setTestResult({ ok: false, message: err.response?.data?.error || "Failed to connect shared mailbox" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -240,8 +260,11 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
 
           <button
             className="btn"
-            onClick={() => connectOutlook(false)}
-            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 22px", fontSize: 13 }}
+            onClick={() => { setConnectMode(connectMode === "outlook" ? "" : "outlook"); setTestResult(null); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 8, padding: "10px 22px", fontSize: 13,
+              ...(connectMode === "outlook" ? { borderColor: "#0078D4", background: "#e8f0fe", color: "#0078D4" } : {}),
+            }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" fill="#0078D4"/><path d="M1 6l11 7 11-7" fill="none" stroke="#fff" strokeWidth="1.5"/><ellipse cx="8" cy="13" rx="5" ry="6" fill="#0A4E8A"/><ellipse cx="8" cy="13" rx="3.5" ry="4.5" fill="#fff"/></svg>
             Outlook
@@ -286,6 +309,68 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
               <button className="btn btn-primary" onClick={saveGmail} disabled={!gmailForm.email || !gmailForm.password || saving}>
                 {saving ? "Saving..." : "Connect"}
               </button>
+            </div>
+          </div>
+        )}
+
+        {connectMode === "outlook" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* Azure redirect URI */}
+            {redirectUri && (
+              <div style={{
+                fontSize: 11, color: "#1e40af", background: "#dbeafe", padding: "10px 14px",
+                borderRadius: 8, lineHeight: 1.6, border: "1px solid #93c5fd",
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>Azure redirect URI (register this in your Azure app):</div>
+                <code style={{ fontSize: 11, wordBreak: "break-all" }}>{redirectUri}</code>
+              </div>
+            )}
+
+            {/* Sign in with Microsoft */}
+            <button
+              className="btn"
+              onClick={connectOutlook}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                padding: "12px 20px", fontSize: 14, fontWeight: 500, width: "100%",
+                border: "1px solid var(--border2)", borderRadius: 8,
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 21 21"><rect width="10" height="10" fill="#F25022"/><rect x="11" width="10" height="10" fill="#7FBA00"/><rect y="11" width="10" height="10" fill="#00A4EF"/><rect x="11" y="11" width="10" height="10" fill="#FFB900"/></svg>
+              Sign in with Microsoft
+            </button>
+
+            {/* Shared mailbox divider */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "4px 0" }}>
+              <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+              <span style={{ fontSize: 11, color: "var(--text3)" }}>or connect a shared mailbox</span>
+              <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+            </div>
+
+            {/* Shared mailbox input */}
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="email"
+                placeholder="commercial@oneport365.com"
+                value={sharedEmail}
+                onChange={(e) => setSharedEmail(e.target.value)}
+                style={{ flex: 1, padding: "10px 14px", fontSize: 13, border: "1px solid var(--border2)", borderRadius: 8, fontFamily: "Inter, sans-serif", outline: "none", color: "var(--text)" }}
+              />
+              <button
+                className="btn"
+                onClick={connectSharedMailbox}
+                disabled={!sharedEmail || saving}
+                style={{ padding: "10px 20px", fontSize: 13, fontWeight: 600, background: "#1a2d1c", color: "#fff", border: "none", borderRadius: 8 }}
+              >
+                {saving ? "..." : "Connect"}
+              </button>
+            </div>
+
+            <div style={{
+              fontSize: 11, color: "#166534", background: "#dcfce7", padding: "8px 12px",
+              borderRadius: 8, lineHeight: 1.5,
+            }}>
+              <strong>No password needed.</strong> Sign in with Microsoft above first, then type the shared mailbox email here and click Connect — it uses the same login automatically.
             </div>
           </div>
         )}

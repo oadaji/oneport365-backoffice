@@ -60,6 +60,52 @@ router.delete("/email-accounts/:id", async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/email-accounts/shared — connect a shared mailbox using existing OAuth tokens
+router.post("/email-accounts/shared", async (req: Request, res: Response) => {
+  try {
+    const { email, label } = req.body;
+    if (!email) { res.status(400).json({ error: "email is required" }); return; }
+
+    // Find an existing OAuth2 Outlook account to borrow tokens from
+    const donor = await EmailAccount.findOne({ provider: "outlook", authType: "oauth2", active: true });
+    if (!donor || !donor.refreshToken) {
+      res.status(400).json({ error: "Sign in with Microsoft first, then connect the shared mailbox" });
+      return;
+    }
+
+    // Check if already exists
+    const existing = await EmailAccount.findOne({ email: email.toLowerCase() });
+    if (existing) {
+      res.status(409).json({ error: "This mailbox is already connected" });
+      return;
+    }
+
+    const account = await EmailAccount.create({
+      email: email.toLowerCase(),
+      label: label || email,
+      provider: "outlook",
+      authType: "oauth2",
+      shared: true,
+      refreshToken: donor.refreshToken,
+      accessToken: donor.accessToken,
+      tokenExpiresAt: donor.tokenExpiresAt,
+      active: true,
+    });
+
+    const { password: _, refreshToken: _r, accessToken: _a, ...safe } = account.toObject();
+    res.status(201).json(safe);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to connect shared mailbox" });
+  }
+});
+
+// GET /api/email-accounts/oauth/redirect-uri — show the redirect URI for Azure setup
+router.get("/email-accounts/oauth/redirect-uri", (_req: Request, res: Response) => {
+  const redirectUri = process.env.MICROSOFT_REDIRECT_URI ||
+    `${_req.protocol}://${_req.get("host")}/api/auth/microsoft/callback`;
+  res.json({ redirectUri });
+});
+
 // POST /api/email-accounts/:id/test — test IMAP connection
 router.post("/email-accounts/:id/test", async (req: Request, res: Response) => {
   try {
