@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { OceanFreightRate, HaulageImportRate, HaulageExportRate, OtherCharge } from "../models/rate";
+import { RateBenchmark } from "../models/market";
 
 const router = Router();
 
@@ -60,6 +61,25 @@ router.post("/rates/haulage-import", async (req: Request, res: Response) => {
   }
 });
 
+router.patch("/rates/haulage-import/:id", async (req: Request, res: Response) => {
+  try {
+    const updated = await HaulageImportRate.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updated) { res.status(404).json({ error: "Rate not found" }); return; }
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update rate" });
+  }
+});
+
+router.delete("/rates/haulage-import/:id", async (req: Request, res: Response) => {
+  try {
+    await HaulageImportRate.findByIdAndUpdate(req.params.id, { archived: true });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete rate" });
+  }
+});
+
 // Haulage Export Rates
 router.get("/rates/haulage-export", async (_req: Request, res: Response) => {
   try {
@@ -79,6 +99,25 @@ router.post("/rates/haulage-export", async (req: Request, res: Response) => {
   }
 });
 
+router.patch("/rates/haulage-export/:id", async (req: Request, res: Response) => {
+  try {
+    const updated = await HaulageExportRate.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updated) { res.status(404).json({ error: "Rate not found" }); return; }
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update rate" });
+  }
+});
+
+router.delete("/rates/haulage-export/:id", async (req: Request, res: Response) => {
+  try {
+    await HaulageExportRate.findByIdAndUpdate(req.params.id, { archived: true });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete rate" });
+  }
+});
+
 // Other Charges
 router.get("/rates/other-charges", async (_req: Request, res: Response) => {
   try {
@@ -95,6 +134,35 @@ router.post("/rates/other-charges", async (req: Request, res: Response) => {
     res.status(201).json(charges);
   } catch (err) {
     res.status(500).json({ error: "Failed to create other charge" });
+  }
+});
+
+router.patch("/rates/other-charges/:id", async (req: Request, res: Response) => {
+  try {
+    const updated = await OtherCharge.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updated) { res.status(404).json({ error: "Charge not found" }); return; }
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update charge" });
+  }
+});
+
+router.delete("/rates/other-charges/:id", async (req: Request, res: Response) => {
+  try {
+    await OtherCharge.findByIdAndUpdate(req.params.id, { archived: true });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete charge" });
+  }
+});
+
+// Market Benchmarks
+router.get("/rates/benchmarks", async (_req: Request, res: Response) => {
+  try {
+    const benchmarks = await RateBenchmark.find({}).sort({ createdAt: -1 });
+    res.json(benchmarks);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load benchmarks" });
   }
 });
 

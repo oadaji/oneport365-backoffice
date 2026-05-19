@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { Plus, Download, X } from "lucide-react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
+import { Plus, Download, X, Zap, Mail, ChevronDown, Database } from "lucide-react";
 import api from "../lib/api";
 
 type Tab = "ocean" | "import" | "export" | "other";
+type SortDir = "asc" | "desc";
 
 interface OceanRate {
   _id: string; carrier: string; polCode: string; podCode: string;
@@ -21,31 +22,56 @@ interface HaulageRate {
   currency?: string; price: number; archived?: boolean;
 }
 
-interface OtherCharge {
+interface OtherChargeItem {
   _id: string; itemName: string; itemCategory: string;
   shipmentType?: string; commodityType?: string; country?: string;
   currency?: string; price?: number; asPerReceipt?: boolean;
   expiryDate?: string; archived?: boolean;
 }
 
+interface Benchmark {
+  _id: string; laneName: string; rate40ft?: number; waAdjustmentPct?: number; source?: string;
+}
+
 function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+  return new Date(d).toLocaleDateString("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
-function expiryStatus(d?: string): { cls: string; label: string } {
-  if (!d) return { cls: "", label: "" };
+function expiryStatus(d?: string): { label: string; color: string; dot: string } {
+  if (!d) return { label: "", color: "", dot: "" };
   const days = (new Date(d).getTime() - Date.now()) / 86400000;
-  if (days < 0) return { cls: "row-expired", label: "expired" };
-  if (days < 30) return { cls: "row-expiring", label: "expiring" };
-  return { cls: "", label: "" };
+  if (days < 0) return { label: "expired", color: "#dc2626", dot: "#dc2626" };
+  if (days < 30) return { label: "expiring", color: "#d97706", dot: "#d97706" };
+  return { label: "", color: "var(--text)", dot: "" };
 }
 
-function LocodeBadge({ code }: { code: string }) {
+function PolBadge({ code }: { code: string }) {
   return (
     <span style={{
-      background: "#dcfce7", color: "#166534", padding: "1px 6px",
+      background: "#dcfce7", color: "#166534", padding: "2px 7px",
       borderRadius: 4, fontSize: 11, fontFamily: "monospace", fontWeight: 600,
     }}>{code}</span>
+  );
+}
+
+function PodBadge({ code }: { code: string }) {
+  return (
+    <span style={{
+      background: "#fef3c7", color: "#92400e", padding: "2px 7px",
+      borderRadius: 4, fontSize: 11, fontFamily: "monospace", fontWeight: 600,
+    }}>{code}</span>
+  );
+}
+
+function RateTypePill({ type }: { type?: string }) {
+  if (!type) return <span style={{ color: "var(--text3)", fontSize: 11 }}>—</span>;
+  const label = type.replace(/_/g, " ");
+  const bg = type === "all_in" ? "#dbeafe" : type === "spot" ? "#fef3c7" : "#f3f4f6";
+  const color = type === "all_in" ? "#1d4ed8" : type === "spot" ? "#92400e" : "#374151";
+  return (
+    <span style={{ background: bg, color, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 500, whiteSpace: "nowrap" }}>
+      {label}
+    </span>
   );
 }
 
@@ -54,7 +80,8 @@ export default function Rates() {
   const [ocean, setOcean] = useState<OceanRate[]>([]);
   const [haulImport, setHaulImport] = useState<HaulageRate[]>([]);
   const [haulExport, setHaulExport] = useState<HaulageRate[]>([]);
-  const [other, setOther] = useState<OtherCharge[]>([]);
+  const [other, setOther] = useState<OtherChargeItem[]>([]);
+  const [benchmarks, setBenchmarks] = useState<Benchmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [equipFilter, setEquipFilter] = useState("");
@@ -65,15 +92,24 @@ export default function Rates() {
   const [statusFilter, setStatusFilter] = useState("");
   const [modal, setModal] = useState<{ tab: Tab; item: any | null } | null>(null);
   const [formData, setFormData] = useState<any>({});
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sortCol, setSortCol] = useState<string>("");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [partnerDropdown, setPartnerDropdown] = useState(false);
+  const [seeding, setSeeding] = useState(false);
 
-  useEffect(() => {
+  const loadAll = useCallback(() => {
+    setLoading(true);
     Promise.all([
       api.get("/rates/ocean").then(r => setOcean(r.data || [])),
       api.get("/rates/haulage-import").then(r => setHaulImport(r.data || [])),
       api.get("/rates/haulage-export").then(r => setHaulExport(r.data || [])),
       api.get("/rates/other-charges").then(r => setOther(r.data || [])),
+      api.get("/rates/benchmarks").then(r => setBenchmarks(r.data || [])).catch(() => {}),
     ]).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
 
   const reload = async (t: Tab) => {
     const endpoints: Record<Tab, string> = {
@@ -87,12 +123,32 @@ export default function Rates() {
     if (t === "other") setOther(data || []);
   };
 
+  const toggleSort = (col: string) => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  };
+
+  const applySorting = (data: any[], col: string, dir: SortDir) => {
+    if (!col) return data;
+    return [...data].sort((a, b) => {
+      let va = a[col], vb = b[col];
+      if (typeof va === "string") va = va.toLowerCase();
+      if (typeof vb === "string") vb = vb.toLowerCase();
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (va < vb) return dir === "asc" ? -1 : 1;
+      if (va > vb) return dir === "asc" ? 1 : -1;
+      return 0;
+    });
+  };
+
   const filtered = useMemo(() => {
     const s = search.toLowerCase();
     const applySearch = (text: string) => !s || text.toLowerCase().includes(s);
 
+    let result: any[];
     if (tab === "ocean") {
-      return ocean.filter(r => {
+      result = ocean.filter(r => {
         const text = `${r.carrier} ${r.polCode} ${r.podCode} ${r.originCountry || ""} ${r.destCountry || ""}`;
         if (!applySearch(text)) return false;
         if (equipFilter && r.equipmentType !== equipFilter) return false;
@@ -108,15 +164,15 @@ export default function Rates() {
         }
         return true;
       });
+    } else if (tab === "import") {
+      result = haulImport.filter(r => applySearch(`${r.terminalName} ${r.destLga || ""} ${r.destCity || ""} ${r.destState || ""}`));
+    } else if (tab === "export") {
+      result = haulExport.filter(r => applySearch(`${r.terminalName} ${r.originLga || ""} ${r.originCity || ""} ${r.originState || ""}`));
+    } else {
+      result = other.filter(r => applySearch(`${r.itemName} ${r.itemCategory}`));
     }
-    if (tab === "import") {
-      return haulImport.filter(r => applySearch(`${r.terminalName} ${r.destLga || ""} ${r.destCity || ""} ${r.destState || ""}`));
-    }
-    if (tab === "export") {
-      return haulExport.filter(r => applySearch(`${r.terminalName} ${r.originLga || ""} ${r.originCity || ""} ${r.originState || ""}`));
-    }
-    return other.filter(r => applySearch(`${r.itemName} ${r.itemCategory}`));
-  }, [tab, ocean, haulImport, haulExport, other, search, equipFilter, rateTypeFilter, carrierFilter, origCountryFilter, destCountryFilter, statusFilter]);
+    return applySorting(result, sortCol, sortDir);
+  }, [tab, ocean, haulImport, haulExport, other, search, equipFilter, rateTypeFilter, carrierFilter, origCountryFilter, destCountryFilter, statusFilter, sortCol, sortDir]);
 
   const clearFilters = () => { setSearch(""); setEquipFilter(""); setRateTypeFilter(""); setCarrierFilter(""); setOrigCountryFilter(""); setDestCountryFilter(""); setStatusFilter(""); };
 
@@ -163,11 +219,37 @@ export default function Rates() {
     a.click();
   };
 
+  const loadSampleData = async () => {
+    setSeeding(true);
+    try {
+      await api.post("/seed/reset");
+      await api.post("/seed");
+      loadAll();
+    } catch { alert("Failed to load sample data"); }
+    finally { setSeeding(false); }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const ids = filtered.map((r: any) => r._id);
+    if (ids.every(id => selected.has(id))) setSelected(new Set());
+    else setSelected(new Set(ids));
+  };
+
+  const allSelected = filtered.length > 0 && filtered.every((r: any) => selected.has(r._id));
+
   const tabs: { key: Tab; label: string; icon: string; count: number }[] = [
-    { key: "ocean", label: "Ocean Freight", icon: "🚢", count: ocean.length },
-    { key: "import", label: "Haulage — Import", icon: "🚛", count: haulImport.length },
-    { key: "export", label: "Haulage — Export", icon: "🚛", count: haulExport.length },
-    { key: "other", label: "Other Charges", icon: "📋", count: other.length },
+    { key: "ocean", label: "Ocean Freight", icon: "\u{1F6A2}", count: ocean.length },
+    { key: "import", label: "Haulage \u2014 Import", icon: "\u{1F69B}", count: haulImport.length },
+    { key: "export", label: "Haulage \u2014 Export", icon: "\u{1F69B}", count: haulExport.length },
+    { key: "other", label: "Other Charges", icon: "\u{1F4CB}", count: other.length },
   ];
 
   const inputStyle: React.CSSProperties = {
@@ -177,30 +259,84 @@ export default function Rates() {
 
   const selectStyle: React.CSSProperties = { ...inputStyle, background: "var(--surface)" };
 
+  const partnerName = (r: OceanRate) => {
+    if (!r.partnerId) return null;
+    if (typeof r.partnerId === "object" && r.partnerId.name) return r.partnerId.name;
+    return null;
+  };
+
+  const SortHeader = ({ col, children, align }: { col: string; children: React.ReactNode; align?: string }) => (
+    <th
+      style={{ ...thStyle, textAlign: (align as any) || "left", cursor: "pointer", userSelect: "none" }}
+      onClick={() => toggleSort(col)}
+    >
+      {children}
+      {sortCol === col && <span style={{ marginLeft: 3, fontSize: 8 }}>{sortDir === "asc" ? "\u25B2" : "\u25BC"}</span>}
+    </th>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
-      {/* Tab bar */}
-      <div style={{ display: "flex", borderBottom: "1px solid var(--border)", background: "var(--surface)", padding: "0 16px" }}>
-        {tabs.map(t => (
-          <div
-            key={t.key}
-            onClick={() => { setTab(t.key); clearFilters(); }}
-            style={{
-              padding: "10px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer",
-              color: tab === t.key ? "var(--accent-dark)" : "var(--text3)",
-              borderBottom: tab === t.key ? "2px solid var(--accent)" : "2px solid transparent",
-              display: "flex", alignItems: "center", gap: 6,
-            }}
-          >
-            <span>{t.icon}</span> {t.label}
-            <span style={{
-              fontSize: 10, padding: "1px 6px", borderRadius: 10, fontWeight: 600,
-              background: tab === t.key ? "var(--accent-light)" : "var(--bg)",
-              color: tab === t.key ? "var(--accent-dark)" : "var(--text3)",
-            }}>{t.count}</span>
-          </div>
-        ))}
+      {/* Tab bar + Load sample data */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border)", background: "var(--surface)", padding: "0 16px" }}>
+        <div style={{ display: "flex" }}>
+          {tabs.map(t => (
+            <div
+              key={t.key}
+              onClick={() => { setTab(t.key); clearFilters(); setSelected(new Set()); setSortCol(""); }}
+              style={{
+                padding: "10px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer",
+                color: tab === t.key ? "var(--accent-dark)" : "var(--text3)",
+                borderBottom: tab === t.key ? "2px solid var(--accent)" : "2px solid transparent",
+                display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              <span>{t.icon}</span> {t.label}
+              <span style={{
+                fontSize: 10, padding: "1px 6px", borderRadius: 10, fontWeight: 600,
+                background: tab === t.key ? "var(--accent-light)" : "var(--bg)",
+                color: tab === t.key ? "var(--accent-dark)" : "var(--text3)",
+              }}>{t.count}</span>
+            </div>
+          ))}
+        </div>
+        <button
+          className="btn btn-sm"
+          onClick={loadSampleData}
+          disabled={seeding}
+          style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}
+        >
+          <Database size={11} /> {seeding ? "Loading..." : "Load sample data"}
+        </button>
       </div>
+
+      {/* Market rate ticker */}
+      {benchmarks.length > 0 && (
+        <div style={{
+          display: "flex", gap: 0, overflowX: "auto", background: "#f8faf8",
+          borderBottom: "1px solid var(--border)", padding: "0", flexShrink: 0,
+        }}>
+          {benchmarks.map(b => (
+            <div key={b._id} style={{
+              padding: "8px 16px", borderRight: "1px solid var(--border)",
+              minWidth: 140, flexShrink: 0,
+            }}>
+              <div style={{ fontSize: 10, color: "var(--text3)", whiteSpace: "nowrap" }}>{b.laneName}</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>
+                  ${b.rate40ft?.toLocaleString()}
+                </span>
+                {b.waAdjustmentPct ? (
+                  <span style={{ fontSize: 10, color: "#d97706", fontWeight: 500 }}>
+                    (+{b.waAdjustmentPct}% WA)
+                  </span>
+                ) : null}
+              </div>
+              <div style={{ fontSize: 9, color: "var(--text3)" }}>{b.source}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Header + actions */}
       <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
@@ -212,9 +348,49 @@ export default function Rates() {
             International sea freight rates between ports — per container type
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, position: "relative" }}>
+          {/* Contact Partner */}
+          <div style={{ position: "relative" }}>
+            <div style={{ display: "flex" }}>
+              <button
+                className="btn btn-sm"
+                onClick={() => setPartnerDropdown(!partnerDropdown)}
+                style={{ display: "flex", alignItems: "center", gap: 4, border: "1.5px solid var(--accent)", color: "var(--accent-dark)", borderRadius: "6px 0 0 6px", borderRight: "none" }}
+              >
+                <Mail size={12} /> Contact Partner
+              </button>
+              <button
+                className="btn btn-sm"
+                onClick={() => setPartnerDropdown(!partnerDropdown)}
+                style={{ border: "1.5px solid var(--accent)", color: "var(--accent-dark)", borderRadius: "0 6px 6px 0", padding: "4px 6px" }}
+              >
+                <ChevronDown size={12} />
+              </button>
+            </div>
+            {partnerDropdown && (
+              <div style={{
+                position: "absolute", top: "100%", right: 0, marginTop: 4,
+                background: "var(--surface)", border: "1px solid var(--border)",
+                borderRadius: 8, padding: 8, minWidth: 200, zIndex: 100,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+              }}>
+                <div style={{ fontSize: 11, color: "var(--text3)", padding: "4px 8px" }}>
+                  Select rates first, then contact partners for updated pricing.
+                </div>
+                <button className="btn btn-sm" onClick={() => setPartnerDropdown(false)} style={{ marginTop: 4, width: "100%" }}>Close</button>
+              </div>
+            )}
+          </div>
+
           <button className="btn btn-sm" onClick={exportCsv} style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <Download size={12} /> Export CSV
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={() => { const item: any = { rateType: "spot" }; openModal("ocean", null); setFormData(item); }}
+            style={{ display: "flex", alignItems: "center", gap: 4, border: "1.5px solid var(--accent)", color: "var(--accent-dark)" }}
+          >
+            <Zap size={12} /> Spot Rate
           </button>
           <button className="btn btn-primary btn-sm" onClick={() => openModal(tab, null)} style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <Plus size={12} /> Add Rate
@@ -226,7 +402,7 @@ export default function Rates() {
       <div style={{ padding: "10px 16px", background: "var(--surface)", borderBottom: "1px solid var(--border)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", marginBottom: 3 }}>Search</div>
-          <input placeholder="Carrier, port, country..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...inputStyle, width: 160 }} />
+          <input placeholder="Carrier, port, cour..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...inputStyle, width: 160 }} />
         </div>
         {tab === "ocean" && (
           <>
@@ -274,9 +450,14 @@ export default function Rates() {
         <button className="btn btn-sm" onClick={clearFilters} style={{ alignSelf: "flex-end", marginBottom: 1 }}>Clear</button>
       </div>
 
-      {/* Count */}
-      <div style={{ padding: "8px 16px", fontSize: 12, color: "var(--text3)", background: "var(--bg)" }}>
-        {filtered.length} rate{filtered.length !== 1 ? "s" : ""}
+      {/* Count + sort legend */}
+      <div style={{ padding: "8px 16px", fontSize: 12, color: "var(--text3)", background: "var(--bg)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span><strong>{filtered.length}</strong> rate{filtered.length !== 1 ? "s" : ""}</span>
+        <span style={{ fontSize: 10 }}>
+          Click column header to sort &middot;{" "}
+          <span style={{ color: "#d97706" }}>{"\u25A0"}</span> expiring soon &middot;{" "}
+          <span style={{ color: "#dc2626" }}>{"\u25A0"}</span> expired
+        </span>
       </div>
 
       {/* Table */}
@@ -289,56 +470,60 @@ export default function Rates() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ background: "var(--bg)" }}>
+                <th style={{ ...thStyle, width: 30 }}>
+                  <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} style={{ cursor: "pointer" }} />
+                </th>
                 {tab === "ocean" && (
                   <>
-                    <th style={thStyle}>Carrier</th>
-                    <th style={thStyle}>POL</th>
-                    <th style={thStyle}>Origin</th>
-                    <th style={thStyle}>POD</th>
-                    <th style={thStyle}>Dest</th>
-                    <th style={thStyle}>Equip</th>
-                    <th style={thStyle}>Rate Type</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>20FT</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>40FT</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>40HC</th>
-                    <th style={thStyle}>Transit</th>
-                    <th style={thStyle}>Expiry</th>
-                    <th style={thStyle}></th>
+                    <SortHeader col="carrier">Carrier</SortHeader>
+                    <SortHeader col="polCode">POL</SortHeader>
+                    <SortHeader col="originCountry">Origin</SortHeader>
+                    <SortHeader col="podCode">POD</SortHeader>
+                    <SortHeader col="destCountry">Dest</SortHeader>
+                    <SortHeader col="equipmentType">Equip</SortHeader>
+                    <SortHeader col="rateType">Rate Type</SortHeader>
+                    <SortHeader col="amount20ft" align="right">20FT</SortHeader>
+                    <SortHeader col="amount40ft" align="right">40FT</SortHeader>
+                    <SortHeader col="amount40hc" align="right">40HC</SortHeader>
+                    <SortHeader col="transitTime">Transit</SortHeader>
+                    <SortHeader col="expiryDate">Expiry</SortHeader>
+                    <th style={thStyle}>Partner</th>
+                    <th style={thStyle}>Vs Market</th>
                   </>
                 )}
                 {tab === "import" && (
                   <>
-                    <th style={thStyle}>Terminal</th>
-                    <th style={thStyle}>Port</th>
-                    <th style={thStyle}>Dest City</th>
-                    <th style={thStyle}>Dest LGA</th>
-                    <th style={thStyle}>State</th>
-                    <th style={thStyle}>Equip</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Price (NGN)</th>
+                    <SortHeader col="terminalName">Terminal</SortHeader>
+                    <SortHeader col="portCode">Port</SortHeader>
+                    <SortHeader col="destCity">Dest City</SortHeader>
+                    <SortHeader col="destLga">Dest LGA</SortHeader>
+                    <SortHeader col="destState">State</SortHeader>
+                    <SortHeader col="equipmentType">Equip</SortHeader>
+                    <SortHeader col="price" align="right">Price (NGN)</SortHeader>
                     <th style={thStyle}></th>
                   </>
                 )}
                 {tab === "export" && (
                   <>
-                    <th style={thStyle}>Terminal</th>
-                    <th style={thStyle}>Port</th>
-                    <th style={thStyle}>Origin City</th>
-                    <th style={thStyle}>Origin LGA</th>
-                    <th style={thStyle}>State</th>
-                    <th style={thStyle}>Equip</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Price (NGN)</th>
+                    <SortHeader col="terminalName">Terminal</SortHeader>
+                    <SortHeader col="portCode">Port</SortHeader>
+                    <SortHeader col="originCity">Origin City</SortHeader>
+                    <SortHeader col="originLga">Origin LGA</SortHeader>
+                    <SortHeader col="originState">State</SortHeader>
+                    <SortHeader col="equipmentType">Equip</SortHeader>
+                    <SortHeader col="price" align="right">Price (NGN)</SortHeader>
                     <th style={thStyle}></th>
                   </>
                 )}
                 {tab === "other" && (
                   <>
-                    <th style={thStyle}>Item</th>
-                    <th style={thStyle}>Category</th>
-                    <th style={thStyle}>Type</th>
-                    <th style={thStyle}>Currency</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Price</th>
+                    <SortHeader col="itemName">Item</SortHeader>
+                    <SortHeader col="itemCategory">Category</SortHeader>
+                    <SortHeader col="shipmentType">Type</SortHeader>
+                    <SortHeader col="currency">Currency</SortHeader>
+                    <SortHeader col="price" align="right">Price</SortHeader>
                     <th style={thStyle}>As Per Receipt</th>
-                    <th style={thStyle}>Expiry</th>
+                    <SortHeader col="expiryDate">Expiry</SortHeader>
                     <th style={thStyle}></th>
                   </>
                 )}
@@ -347,45 +532,60 @@ export default function Rates() {
             <tbody>
               {tab === "ocean" && (filtered as OceanRate[]).map(r => {
                 const exp = expiryStatus(r.expiryDate);
+                const partner = partnerName(r);
                 return (
-                  <tr key={r._id} style={{ borderBottom: "1px solid var(--border)", ...(exp.label === "expired" ? { background: "#fef2f2" } : exp.label === "expiring" ? { background: "#fffbeb" } : {}) }}
+                  <tr
+                    key={r._id}
+                    style={{
+                      borderBottom: "1px solid var(--border)",
+                      ...(exp.label === "expired" ? { background: "#fef2f2" } : exp.label === "expiring" ? { background: "#fffbeb" } : {}),
+                    }}
                     onMouseEnter={e => e.currentTarget.style.background = "#f8faf8"}
                     onMouseLeave={e => e.currentTarget.style.background = exp.label === "expired" ? "#fef2f2" : exp.label === "expiring" ? "#fffbeb" : ""}
                   >
-                    <td style={tdStyle}><span style={{ fontWeight: 600 }}>{r.carrier}</span></td>
-                    <td style={tdStyle}><LocodeBadge code={r.polCode} /></td>
-                    <td style={tdStyle}>{r.originCountry || "—"}</td>
-                    <td style={tdStyle}><LocodeBadge code={r.podCode} /></td>
-                    <td style={tdStyle}>{r.destCountry || "—"}</td>
-                    <td style={tdStyle}>{r.equipmentType || "—"}</td>
-                    <td style={tdStyle}><span style={{ fontSize: 10 }}>{r.rateType || "—"}</span></td>
-                    <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>{r.amount20ft ? `USD ${r.amount20ft.toLocaleString()}` : "—"}</td>
-                    <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>{r.amount40ft ? `USD ${r.amount40ft.toLocaleString()}` : "—"}</td>
-                    <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>{r.amount40hc ? `USD ${r.amount40hc.toLocaleString()}` : "—"}</td>
-                    <td style={tdStyle}>{r.transitTime || "—"}</td>
                     <td style={tdStyle}>
-                      <span style={{ color: exp.label === "expired" ? "var(--danger)" : exp.label === "expiring" ? "var(--warn)" : "var(--text)" }}>
-                        {exp.label ? (exp.label === "expired" ? "● " : "▲ ") : ""}{r.expiryDate ? fmtDate(r.expiryDate) : "—"}
+                      <input type="checkbox" checked={selected.has(r._id)} onChange={() => toggleSelect(r._id)} style={{ cursor: "pointer" }} />
+                    </td>
+                    <td style={tdStyle}><span style={{ fontWeight: 600 }}>{r.carrier}</span></td>
+                    <td style={tdStyle}><PolBadge code={r.polCode} /></td>
+                    <td style={tdStyle}>{r.originCountry || "\u2014"}</td>
+                    <td style={tdStyle}><PodBadge code={r.podCode} /></td>
+                    <td style={tdStyle}>{r.destCountry || "\u2014"}</td>
+                    <td style={tdStyle}>{(r.equipmentType || "").toUpperCase() || "\u2014"}</td>
+                    <td style={tdStyle}><RateTypePill type={r.rateType} /></td>
+                    <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>{r.amount20ft ? `USD ${r.amount20ft.toLocaleString()}` : "\u2014"}</td>
+                    <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>{r.amount40ft ? `USD ${r.amount40ft.toLocaleString()}` : "\u2014"}</td>
+                    <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>{r.amount40hc ? `USD ${r.amount40hc.toLocaleString()}` : "\u2014"}</td>
+                    <td style={tdStyle}>{r.transitTime || "\u2014"}</td>
+                    <td style={tdStyle}>
+                      <span style={{ color: exp.color || "var(--text)", display: "flex", alignItems: "center", gap: 4 }}>
+                        {exp.dot && <span style={{ width: 7, height: 7, borderRadius: "50%", background: exp.dot, display: "inline-block", flexShrink: 0 }} />}
+                        {r.expiryDate ? fmtDate(r.expiryDate) : "\u2014"}
                       </span>
                     </td>
                     <td style={tdStyle}>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button onClick={() => openModal("ocean", r)} style={iconBtn} title="Edit">✏️</button>
-                        <button onClick={() => deleteRate("ocean", r._id)} style={iconBtn} title="Delete"><X size={12} /></button>
-                      </div>
+                      {partner ? (
+                        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
+                          <Zap size={10} style={{ color: "var(--accent)" }} /> {partner}
+                        </span>
+                      ) : "\u2014"}
                     </td>
+                    <td style={tdStyle}><span style={{ color: "var(--text3)" }}>{"\u2014"}</span></td>
                   </tr>
                 );
               })}
               {tab === "import" && (filtered as HaulageRate[]).map(r => (
                 <tr key={r._id} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td style={tdStyle}>
+                    <input type="checkbox" checked={selected.has(r._id)} onChange={() => toggleSelect(r._id)} style={{ cursor: "pointer" }} />
+                  </td>
                   <td style={tdStyle}><span style={{ fontWeight: 500 }}>{r.terminalName}</span></td>
-                  <td style={tdStyle}><LocodeBadge code={r.portCode} /></td>
-                  <td style={tdStyle}>{r.destCity || "—"}</td>
-                  <td style={tdStyle}>{r.destLga || "—"}</td>
-                  <td style={tdStyle}>{r.destState || "—"}</td>
-                  <td style={tdStyle}>{r.equipmentType || "—"}</td>
-                  <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>₦{r.price?.toLocaleString()}</td>
+                  <td style={tdStyle}><PolBadge code={r.portCode} /></td>
+                  <td style={tdStyle}>{r.destCity || "\u2014"}</td>
+                  <td style={tdStyle}>{r.destLga || "\u2014"}</td>
+                  <td style={tdStyle}>{r.destState || "\u2014"}</td>
+                  <td style={tdStyle}>{(r.equipmentType || "").toUpperCase() || "\u2014"}</td>
+                  <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>{"\u20A6"}{r.price?.toLocaleString()}</td>
                   <td style={tdStyle}>
                     <div style={{ display: "flex", gap: 4 }}>
                       <button onClick={() => openModal("import", r)} style={iconBtn}>✏️</button>
@@ -396,13 +596,16 @@ export default function Rates() {
               ))}
               {tab === "export" && (filtered as HaulageRate[]).map(r => (
                 <tr key={r._id} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td style={tdStyle}>
+                    <input type="checkbox" checked={selected.has(r._id)} onChange={() => toggleSelect(r._id)} style={{ cursor: "pointer" }} />
+                  </td>
                   <td style={tdStyle}><span style={{ fontWeight: 500 }}>{r.terminalName}</span></td>
-                  <td style={tdStyle}><LocodeBadge code={r.portCode} /></td>
-                  <td style={tdStyle}>{r.originCity || "—"}</td>
-                  <td style={tdStyle}>{r.originLga || "—"}</td>
-                  <td style={tdStyle}>{r.originState || "—"}</td>
-                  <td style={tdStyle}>{r.equipmentType || "—"}</td>
-                  <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>₦{r.price?.toLocaleString()}</td>
+                  <td style={tdStyle}><PolBadge code={r.portCode} /></td>
+                  <td style={tdStyle}>{r.originCity || "\u2014"}</td>
+                  <td style={tdStyle}>{r.originLga || "\u2014"}</td>
+                  <td style={tdStyle}>{r.originState || "\u2014"}</td>
+                  <td style={tdStyle}>{(r.equipmentType || "").toUpperCase() || "\u2014"}</td>
+                  <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>{"\u20A6"}{r.price?.toLocaleString()}</td>
                   <td style={tdStyle}>
                     <div style={{ display: "flex", gap: 4 }}>
                       <button onClick={() => openModal("export", r)} style={iconBtn}>✏️</button>
@@ -411,19 +614,27 @@ export default function Rates() {
                   </td>
                 </tr>
               ))}
-              {tab === "other" && (filtered as OtherCharge[]).map(r => {
+              {tab === "other" && (filtered as OtherChargeItem[]).map(r => {
                 const exp = expiryStatus(r.expiryDate);
                 return (
                   <tr key={r._id} style={{ borderBottom: "1px solid var(--border)", ...(exp.label === "expired" ? { background: "#fef2f2" } : {}) }}>
+                    <td style={tdStyle}>
+                      <input type="checkbox" checked={selected.has(r._id)} onChange={() => toggleSelect(r._id)} style={{ cursor: "pointer" }} />
+                    </td>
                     <td style={tdStyle}><span style={{ fontWeight: 500 }}>{r.itemName}</span></td>
                     <td style={tdStyle}>{r.itemCategory}</td>
                     <td style={tdStyle}>{r.shipmentType || "both"}</td>
                     <td style={tdStyle}>{r.currency || "NGN"}</td>
                     <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>
-                      {r.asPerReceipt ? "As per receipt" : r.price ? `${r.currency === "USD" ? "$" : "₦"}${r.price.toLocaleString()}` : "—"}
+                      {r.asPerReceipt ? "As per receipt" : r.price ? `${r.currency === "USD" ? "$" : "\u20A6"}${r.price.toLocaleString()}` : "\u2014"}
                     </td>
-                    <td style={tdStyle}>{r.asPerReceipt ? "✓" : ""}</td>
-                    <td style={tdStyle}>{r.expiryDate ? fmtDate(r.expiryDate) : "—"}</td>
+                    <td style={tdStyle}>{r.asPerReceipt ? "\u2713" : ""}</td>
+                    <td style={tdStyle}>
+                      <span style={{ color: exp.color || "var(--text)", display: "flex", alignItems: "center", gap: 4 }}>
+                        {exp.dot && <span style={{ width: 7, height: 7, borderRadius: "50%", background: exp.dot, display: "inline-block", flexShrink: 0 }} />}
+                        {r.expiryDate ? fmtDate(r.expiryDate) : "\u2014"}
+                      </span>
+                    </td>
                     <td style={tdStyle}>
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={() => openModal("other", r)} style={iconBtn}>✏️</button>

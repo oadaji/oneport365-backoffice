@@ -6,6 +6,7 @@ import { Rfq } from "../models/rfq";
 import { Quote } from "../models/quote";
 import { Partner } from "../models/partner";
 import { OceanFreightRate, HaulageImportRate, HaulageExportRate, OtherCharge } from "../models/rate";
+import { RateBenchmark } from "../models/market";
 
 const router = Router();
 
@@ -302,6 +303,19 @@ router.post("/seed", async (_req: Request, res: Response) => {
       { itemName: "Storage (per day)", itemCategory: "Penalty", shipmentType: "fcl", currency: "NGN", price: 95000 },
     ]);
 
+    // ── Market Benchmarks (ticker data) ──────────────────────
+    await RateBenchmark.insertMany([
+      { laneName: "Med \u2192 Lagos", polRegion: "Mediterranean", podRegion: "West Africa", equipType: "40ft", rate40ft: 1540, waAdjustmentPct: 10, validFrom: new Date("2026-05-01"), source: "benchmark" },
+      { laneName: "Europe \u2192 Lagos", polRegion: "North Europe", podRegion: "West Africa", equipType: "40ft", rate40ft: 2016, waAdjustmentPct: 12, validFrom: new Date("2026-05-01"), source: "benchmark" },
+      { laneName: "China \u2192 Lagos", polRegion: "East Asia", podRegion: "West Africa", equipType: "40ft", rate40ft: 3304, waAdjustmentPct: 18, validFrom: new Date("2026-05-01"), source: "benchmark" },
+      { laneName: "Shanghai \u2192 Genoa", polRegion: "East Asia", podRegion: "Mediterranean", equipType: "40ft", rate40ft: 2000, validFrom: new Date("2026-05-01"), source: "drewry" },
+      { laneName: "LA \u2192 Shanghai", polRegion: "US West", podRegion: "East Asia", equipType: "40ft", rate40ft: 2413, validFrom: new Date("2026-05-01"), source: "drewry" },
+      { laneName: "Shanghai \u2192 LA", polRegion: "East Asia", podRegion: "US West", equipType: "40ft", rate40ft: 3701, validFrom: new Date("2026-05-01"), source: "drewry" },
+      { laneName: "WCI Composite", polRegion: "Global", podRegion: "Global", equipType: "40ft", rate40ft: 2553, validFrom: new Date("2026-05-01"), source: "drewry" },
+      { laneName: "Rotterdam \u2192 Shanghai", polRegion: "North Europe", podRegion: "East Asia", equipType: "40ft", rate40ft: 3357, validFrom: new Date("2026-05-01"), source: "drewry" },
+      { laneName: "Shanghai \u2192 Rotterdam", polRegion: "East Asia", podRegion: "North Europe", equipType: "40ft", rate40ft: 4252, validFrom: new Date("2026-05-01"), source: "drewry" },
+    ]);
+
     // ── Quotes ──────────────────────────────────────────────
     await Quote.insertMany([
       {
@@ -337,7 +351,7 @@ router.post("/seed/reset", async (_req: Request, res: Response) => {
     await Promise.all([
       Company.deleteMany({}), Contact.deleteMany({}), Email.deleteMany({}),
       Rfq.deleteMany({}), Quote.deleteMany({}), Partner.deleteMany({}),
-      OceanFreightRate.deleteMany({}), HaulageImportRate.deleteMany({}), HaulageExportRate.deleteMany({}), OtherCharge.deleteMany({}),
+      OceanFreightRate.deleteMany({}), HaulageImportRate.deleteMany({}), HaulageExportRate.deleteMany({}), OtherCharge.deleteMany({}), RateBenchmark.deleteMany({}),
     ]);
     res.json({ success: true, message: "All data cleared" });
   } catch (err) {

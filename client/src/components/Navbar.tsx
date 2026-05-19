@@ -87,15 +87,21 @@ export default function Navbar() {
         })}
       </div>
 
-      {/* User chip */}
-      <div
-        style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 10px", borderRadius: 20, border: "1px solid #2d5225" }}
-        onClick={() => navigate("/settings")}
-      >
-        <div style={{ width: 26, height: 26, borderRadius: "50%", backgroundColor: "#7AB648", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 10, fontWeight: 700 }}>
-          OA
+      {/* Live indicator + User chip */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#7AB648", fontWeight: 500 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: "#7AB648", display: "inline-block" }} />
+          Live
         </div>
-        <span style={{ color: "#c0d0c0", fontSize: 12, fontWeight: 500 }}>Okpanachi Adaji</span>
+        <div
+          style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 10px", borderRadius: 20, border: "1px solid #2d5225" }}
+          onClick={() => navigate("/settings")}
+        >
+          <div style={{ width: 26, height: 26, borderRadius: "50%", backgroundColor: "#7AB648", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 10, fontWeight: 700 }}>
+            OA
+          </div>
+          <span style={{ color: "#c0d0c0", fontSize: 12, fontWeight: 500 }}>Okpanachi Adaji</span>
+        </div>
       </div>
     </nav>
   );
