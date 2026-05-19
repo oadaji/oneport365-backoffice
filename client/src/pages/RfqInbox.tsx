@@ -428,6 +428,7 @@ export default function RfqInbox() {
   const [showEmailMonitor, setShowEmailMonitor] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
 
   useEffect(() => {
     loadRfqs();
@@ -458,6 +459,7 @@ export default function RfqInbox() {
   const selectRfq = (r: Rfq) => {
     setSelected(r);
     setShowReply(false);
+    setBriefOpen(false);
     if (r.followUpDraft) setReplyDraft(r.followUpDraft);
     else setReplyDraft("");
   };
@@ -605,7 +607,7 @@ export default function RfqInbox() {
               </div>
             </div>
 
-            {/* Thread brief */}
+            {/* Thread brief — collapsible */}
             {(() => {
               const f = selected.fields || [];
               const get = (key: string) => f.find((x: any) => x.k?.toLowerCase().includes(key.toLowerCase()));
@@ -617,15 +619,12 @@ export default function RfqInbox() {
               const weight = get("weight");
               const missing = selected.missingFields || [];
 
-
-              // Build summary line
               const modeStr = freightMode?.ok ? (freightMode.v.toLowerCase().includes("air") ? "air freight" : "ocean freight") : "freight";
               const polStr = pol?.ok ? pol.v : "origin";
               const podStr = pod?.ok ? pod.v : "destination";
               const commodityStr = commodity?.ok ? commodity.v : "";
               const summary = `Customer RFQ${commodityStr ? ` for ${commodityStr}` : ""} from ${polStr} to ${podStr} via ${modeStr}.`;
 
-              // Build bullet points
               const bullets: string[] = [];
               if (freightMode?.ok) bullets.push(freightMode.v.includes("Air") ? "Air Freight shipment" : "Ocean Freight shipment");
               if (pol?.ok && pod?.ok) bullets.push(`Route: ${pol.v} → ${pod.v}`);
@@ -635,35 +634,47 @@ export default function RfqInbox() {
               else bullets.push("All required fields present — ready to quote");
 
               return (
-                <div style={{ padding: "12px 20px", borderBottom: "1px solid #86efac", background: "#e8f5ee", borderLeft: "3px solid var(--accent)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12 }}>★</div>
+                <div style={{ borderBottom: "1px solid #86efac", background: "#e8f5ee" }}>
+                  {/* Header — always visible, clickable */}
+                  <div
+                    onClick={() => setBriefOpen(!briefOpen)}
+                    style={{ padding: "10px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, userSelect: "none" }}
+                  >
+                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, flexShrink: 0 }}>✦</div>
                     <span style={{ fontSize: 13, fontWeight: 600, color: "#0b3a2e" }}>Thread Brief</span>
-                    <span className="badge b-rate">Customer RFQ</span>
-                    <span className={`badge ${statusLabel(selected.status).cls}`}>
-                      {statusLabel(selected.status).text === "info needed" ? "Missing info" : statusLabel(selected.status).text === "ready" ? "Ready" : statusLabel(selected.status).text}
-                    </span>
+                    <div style={{ display: "flex", gap: 6, flex: 1 }}>
+                      <span className="badge b-rate">Customer RFQ</span>
+                      <span className={`badge ${statusLabel(selected.status).cls}`}>
+                        {statusLabel(selected.status).text === "info needed" ? "Missing info" : statusLabel(selected.status).text === "ready" ? "Ready" : statusLabel(selected.status).text}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 14, color: "var(--text3)", flexShrink: 0 }}>{briefOpen ? "▴" : "▾"}</span>
                   </div>
 
-                  <div style={{ fontSize: 13, color: "#0b3a2e", lineHeight: 1.5, marginBottom: 8 }}>
-                    {summary}
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    {bullets.map((b, i) => (
-                      <div key={i} style={{ fontSize: 12, color: "#0b3a2e", display: "flex", alignItems: "flex-start", gap: 6 }}>
-                        <span style={{ color: "var(--accent)", marginTop: 2 }}>●</span>
-                        <span>{b}</span>
+                  {/* Body — collapsible */}
+                  {briefOpen && (
+                    <div style={{ padding: "0 20px 12px 20px" }}>
+                      <div style={{ fontSize: 13, color: "#0b3a2e", lineHeight: 1.5, marginBottom: 8 }}>
+                        {summary}
                       </div>
-                    ))}
-                  </div>
 
-                  {selected.followUpDraft && missing.length > 0 && (
-                    <div style={{ marginTop: 10, padding: "8px 12px", background: "#fef3c7", borderRadius: 6, border: "1px solid #fde68a" }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#92400e", marginBottom: 4 }}>→ NEXT STEP</div>
-                      <div style={{ fontSize: 12, color: "#92400e", lineHeight: 1.5 }}>
-                        {selected.followUpDraft.slice(0, 200)}{selected.followUpDraft.length > 200 ? "..." : ""}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {bullets.map((b, i) => (
+                          <div key={i} style={{ fontSize: 12, color: "#0b3a2e", display: "flex", alignItems: "flex-start", gap: 6 }}>
+                            <span style={{ color: "var(--accent)", marginTop: 2 }}>●</span>
+                            <span>{b}</span>
+                          </div>
+                        ))}
                       </div>
+
+                      {selected.followUpDraft && missing.length > 0 && (
+                        <div style={{ marginTop: 10, padding: "8px 12px", background: "#fef3c7", borderRadius: 6, border: "1px solid #fde68a" }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: "#92400e", marginBottom: 4 }}>→ NEXT STEP</div>
+                          <div style={{ fontSize: 12, color: "#92400e", lineHeight: 1.5 }}>
+                            {selected.followUpDraft.slice(0, 200)}{selected.followUpDraft.length > 200 ? "..." : ""}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
