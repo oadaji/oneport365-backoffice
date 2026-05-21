@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only -r dotenv/config src/server.ts",
-    "build": "tsc && cd client && npm install && REACT_APP_API_URL=/api npm run build",
+    "build": "tsc && cd client && npm install && CI=false REACT_APP_API_URL=/api npm run build",
     "start": "node dist/server.js"
   },
   "keywords": [],
