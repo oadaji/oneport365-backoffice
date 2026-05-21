@@ -395,7 +395,7 @@ function effectiveSender(rfq: Rfq): { name: string; email: string } {
   if (!em) return { name: "Unknown", email: "" };
   if (em.fromEmail?.toLowerCase().endsWith("@oneport365.com")) {
     const match = em.body?.match(
-      /From:\s*([^<\n\r]+?)\s*<([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>/i
+      /From:\s*([^<\n\r]+?)\s*<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/i
     );
     if (match && !match[2].toLowerCase().endsWith("@oneport365.com"))
       return { name: match[1].trim(), email: match[2].toLowerCase() };
