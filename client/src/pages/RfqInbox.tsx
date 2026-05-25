@@ -11,6 +11,8 @@ interface Rfq {
   missingFields: string[];
   followUpDraft?: string;
   notes?: string;
+  resolvedSenderName?: string;
+  resolvedSenderEmail?: string;
   email?: { fromName: string; fromEmail: string; subject: string; body: string; receivedAt: string; receivedInbox?: string };
   company?: { _id: string; name: string };
   contact?: { _id: string; firstName: string; lastName?: string; email?: string };
@@ -386,20 +388,15 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
 const QUOTE_REQUIRED = ["Company", "Customer", "Email", "Commodity", "HS Code", "Weight", "Volume", "POL", "POD", "Container"];
 
 /**
- * Layer 3 of @oneport365.com rule: If email is from an internal address,
- * extract the external customer from the body. Used for inbox display,
- * email header, and compose To field.
+ * Read resolved sender from server-computed fields.
+ * Falls back to email from/name if not yet backfilled.
  */
-function effectiveSender(rfq: Rfq): { name: string; email: string } {
+function getSender(rfq: Rfq): { name: string; email: string } {
+  if (rfq.resolvedSenderName && rfq.resolvedSenderEmail) {
+    return { name: rfq.resolvedSenderName, email: rfq.resolvedSenderEmail };
+  }
   const em = rfq.email;
   if (!em) return { name: "Unknown", email: "" };
-  if (em.fromEmail?.toLowerCase().endsWith("@oneport365.com")) {
-    const match = em.body?.match(
-      /From:\s*([^<\n\r]+?)\s*<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/i
-    );
-    if (match && !match[2].toLowerCase().endsWith("@oneport365.com"))
-      return { name: match[1].trim(), email: match[2].toLowerCase() };
-  }
   return { name: em.fromName || em.fromEmail, email: em.fromEmail };
 }
 
@@ -610,7 +607,7 @@ export default function RfqInbox() {
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 2 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>
-                      {effectiveSender(r).name}
+                      {getSender(r).name}
                     </div>
                     <div style={{ fontSize: 10, color: "var(--text3)", flexShrink: 0 }}>
                       {r.email?.receivedAt ? fmtDate(r.email.receivedAt) : ""}
@@ -642,7 +639,7 @@ export default function RfqInbox() {
                 {selected.email?.subject || "No subject"}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                <span style={{ color: "var(--text2)", fontWeight: 500 }}>{effectiveSender(selected).name}</span>
+                <span style={{ color: "var(--text2)", fontWeight: 500 }}>{getSender(selected).name}</span>
                 <span className="badge b-rate">Customer RFQ</span>
                 {selected.status === "info_needed" && <span className="badge b-miss">Missing info</span>}
                 {selected.status === "ready" && <span className="badge b-ok">Ready</span>}
@@ -787,7 +784,7 @@ export default function RfqInbox() {
                   <button onClick={() => setShowReply(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--text3)" }}>×</button>
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600 }}>TO</span>&nbsp;&nbsp;{effectiveSender(selected).email}
+                  <span style={{ fontWeight: 600 }}>TO</span>&nbsp;&nbsp;{getSender(selected).email}
                 </div>
                 <textarea
                   value={replyDraft}

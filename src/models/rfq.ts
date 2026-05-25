@@ -18,6 +18,9 @@ export interface IRfq extends Document {
   groupId?: string;
   groupIndex?: number;
   groupTotal?: number;
+  resolvedSenderName?: string;
+  resolvedSenderEmail?: string;
+  lastExtractionHash?: string;
   sourceMessageId?: string;
   companyId?: Types.ObjectId;
   contactId?: Types.ObjectId;
@@ -38,6 +41,9 @@ const rfqSchema = new Schema<IRfq>(
     groupId: String,
     groupIndex: Number,
     groupTotal: Number,
+    resolvedSenderName: String,
+    resolvedSenderEmail: String,
+    lastExtractionHash: String,
     sourceMessageId: String,
     companyId: { type: Schema.Types.ObjectId, ref: "Company" },
     contactId: { type: Schema.Types.ObjectId, ref: "Contact" },

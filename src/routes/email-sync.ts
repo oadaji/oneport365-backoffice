@@ -5,36 +5,11 @@ import { Rfq } from "../models/rfq";
 import { fetchShippingThreads, deltaSyncGmail, getGmailHistoryId, GmailThread } from "../lib/gmail-api";
 import { extractWithClaude, preClassifyEmail } from "../lib/ai-extract";
 import { resolveContact } from "../lib/resolve-contact";
+import { extractForwardedSender } from "../lib/forwarded-sender";
+import { resolveSender } from "../lib/resolve-sender";
 import crypto from "crypto";
 
 const router = Router();
-
-/**
- * Layer 1 of @oneport365.com rule: If the email is from an internal
- * @oneport365.com address, scan the body for the original external sender.
- */
-function extractForwardedSender(
-  fromEmail: string,
-  fromName: string,
-  body: string
-): { fromEmail: string; fromName: string } {
-  if (!fromEmail.toLowerCase().endsWith("@oneport365.com")) {
-    return { fromEmail, fromName };
-  }
-  const angleMatch = body.match(
-    /From:\s*([^<\n\r]+?)\s*<([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>/i
-  );
-  if (angleMatch && !angleMatch[2].toLowerCase().endsWith("@oneport365.com")) {
-    return { fromName: angleMatch[1].trim(), fromEmail: angleMatch[2].toLowerCase() };
-  }
-  const mailtoMatch = body.match(
-    /From:\s*([^[\n\r]+?)\s*\[mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\]/i
-  );
-  if (mailtoMatch && !mailtoMatch[2].toLowerCase().endsWith("@oneport365.com")) {
-    return { fromName: mailtoMatch[1].trim(), fromEmail: mailtoMatch[2].toLowerCase() };
-  }
-  return { fromEmail, fromName };
-}
 
 function generateRef(): string {
   const now = new Date();
@@ -150,6 +125,7 @@ async function processThread(
 
   for (let idx = 0; idx < extraction.shipments.length; idx++) {
     const s = extraction.shipments[idx];
+    const sender = resolveSender({ fromName: effectiveFromName, fromEmail: effectiveFromEmail, body: threadText }, s.fields);
     await Rfq.create({
       emailId: emailDoc._id,
       ref: generateRef(),
@@ -166,6 +142,8 @@ async function processThread(
       sourceMessageId: thread.threadId,
       companyId: crm.companyId || undefined,
       contactId: crm.contactId,
+      resolvedSenderName: sender.name,
+      resolvedSenderEmail: sender.email,
     });
   }
 

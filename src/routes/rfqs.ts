@@ -3,7 +3,10 @@ import { Rfq } from "../models/rfq";
 import { Email } from "../models/email";
 import { extractWithClaude } from "../lib/ai-extract";
 import { resolveContact } from "../lib/resolve-contact";
+import { EmailAccount } from "../models/email-account";
+import nodemailer from "nodemailer";
 import { findThreadReplies } from "../lib/thread";
+import { resolveSender } from "../lib/resolve-sender";
 import crypto from "crypto";
 
 const router = Router();
@@ -92,31 +95,40 @@ router.delete("/rfqs/:id", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/rfqs/:id/send-followup — send follow-up email
+// POST /api/rfqs/:id/send-followup — send follow-up email via EmailAccount
 router.post("/rfqs/:id/send-followup", async (req: Request, res: Response) => {
   try {
     const rfq = await Rfq.findById(req.params.id).populate("emailId");
     if (!rfq) { res.status(404).json({ error: "RFQ not found" }); return; }
 
     const email = rfq.emailId as any;
-    const { draft, fromEmail, cc } = req.body;
+    const { draft, cc } = req.body;
 
-    if (!process.env.GMAIL_ADDRESS || !process.env.GMAIL_APP_PASSWORD) {
-      res.status(400).json({ error: "Gmail credentials not configured" });
+    // Look up sender account: prefer the inbox this RFQ was received on, fall back to first active
+    const receivedInbox = email?.receivedInbox;
+    let senderAccount = receivedInbox
+      ? await EmailAccount.findOne({ email: receivedInbox, active: true })
+      : null;
+    if (!senderAccount) {
+      senderAccount = await EmailAccount.findOne({ active: true });
+    }
+    if (!senderAccount) {
+      res.status(400).json({ error: "No email account configured — add one via Email Monitoring first" });
       return;
     }
 
-    const nodemailer = require("nodemailer");
+    const isOutlook = senderAccount.provider === "outlook";
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: { user: fromEmail || process.env.GMAIL_ADDRESS, pass: process.env.GMAIL_APP_PASSWORD },
+      host: isOutlook ? "smtp.office365.com" : "smtp.gmail.com",
+      port: isOutlook ? 587 : 465,
+      secure: !isOutlook,
+      auth: { user: senderAccount.email, pass: senderAccount.password },
     });
 
+    const toAddress = rfq.resolvedSenderEmail || email?.fromEmail;
     await transporter.sendMail({
-      from: fromEmail || process.env.GMAIL_ADDRESS,
-      to: email?.fromEmail,
+      from: senderAccount.email,
+      to: toAddress,
       cc: cc || undefined,
       subject: `Re: ${email?.subject || ""}`,
       text: draft,
@@ -165,6 +177,14 @@ router.post("/rfqs/:id/re-extract", async (req: Request, res: Response) => {
       threadBody = `Original:\n${email.body}${replyTexts}`;
     }
 
+    // Content-hash: skip Claude if thread body hasn't changed
+    const normalized = threadBody.replace(/\s+/g, " ").replace(/^>.*$/gm, "").trim();
+    const threadHash = crypto.createHash("sha256").update(normalized).digest("hex");
+    if (rfq.lastExtractionHash === threadHash) {
+      res.json(rfq);
+      return;
+    }
+
     // Capture prior missing fields for status comparison
     const priorMissing = rfq.missingFields || [];
 
@@ -209,11 +229,15 @@ router.post("/rfqs/:id/re-extract", async (req: Request, res: Response) => {
         const newMissing = shipment.missing || [];
         const newStatus = computeStatus(newMissing, siblingPriorMissing, replies.length > 0, shipment.status);
 
+        const sender = resolveSender({ fromName: email.fromName, fromEmail: email.fromEmail, body: email.body }, shipment.fields);
         const result = await Rfq.findByIdAndUpdate(sibling._id, {
           status: newStatus as any,
           fields: shipment.fields,
           missingFields: newMissing,
           followUpDraft: idx === 0 ? (extraction.combinedDraft || shipment.draft) : undefined,
+          resolvedSenderName: sender.name,
+          resolvedSenderEmail: sender.email,
+          lastExtractionHash: threadHash,
         }, { new: true });
 
         if (sibling._id.toString() === rfq._id.toString()) {
@@ -228,11 +252,15 @@ router.post("/rfqs/:id/re-extract", async (req: Request, res: Response) => {
       const newMissing = s.missing || [];
       const newStatus = computeStatus(newMissing, priorMissing, replies.length > 0, s.status);
 
+      const sender = resolveSender({ fromName: email.fromName, fromEmail: email.fromEmail, body: email.body }, s.fields);
       const updated = await Rfq.findByIdAndUpdate(rfq._id, {
         status: newStatus as any,
         fields: s.fields,
         missingFields: newMissing,
         followUpDraft: extraction.combinedDraft || s.draft,
+        resolvedSenderName: sender.name,
+        resolvedSenderEmail: sender.email,
+        lastExtractionHash: threadHash,
       }, { new: true });
       res.json(updated);
     }

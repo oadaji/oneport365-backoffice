@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Router, Request, Response } from "express";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
@@ -10,47 +9,14 @@ import { Rfq } from "../models/rfq";
 import { isAutomatedEmail, normaliseMessageId } from "../lib/email-filters";
 import { extractWithClaude, preClassifyEmail } from "../lib/ai-extract";
 import { resolveContact } from "../lib/resolve-contact";
+import { extractForwardedSender } from "../lib/forwarded-sender";
+import { resolveSender } from "../lib/resolve-sender";
 import { getValidToken, refreshAccessToken } from "../lib/microsoft-oauth";
 import { classifyEmail } from "../lib/classifier";
 import { fetchOutlookShippingEmails, deltaSync as outlookDeltaSync, GraphMessage } from "../lib/outlook-graph";
 import crypto from "crypto";
 
 const router = Router();
-
-/**
- * Layer 1 of @oneport365.com rule: If the email is from an internal
- * @oneport365.com address, scan the body for the original external sender.
- * Patterns matched:
- *   From: Name <ext@domain.com>
- *   From: Name [mailto:ext@domain.com]
- */
-function extractForwardedSender(
-  fromEmail: string,
-  fromName: string,
-  body: string
-): { fromEmail: string; fromName: string } {
-  if (!fromEmail.toLowerCase().endsWith("@oneport365.com")) {
-    return { fromEmail, fromName };
-  }
-
-  // Pattern 1: From: Name <email@domain.com>
-  const angleMatch = body.match(
-    /From:\s*([^<\n\r]+?)\s*<([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>/i
-  );
-  if (angleMatch && !angleMatch[2].toLowerCase().endsWith("@oneport365.com")) {
-    return { fromName: angleMatch[1].trim(), fromEmail: angleMatch[2].toLowerCase() };
-  }
-
-  // Pattern 2: From: Name [mailto:email@domain.com]
-  const mailtoMatch = body.match(
-    /From:\s*([^[\n\r]+?)\s*\[mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\]/i
-  );
-  if (mailtoMatch && !mailtoMatch[2].toLowerCase().endsWith("@oneport365.com")) {
-    return { fromName: mailtoMatch[1].trim(), fromEmail: mailtoMatch[2].toLowerCase() };
-  }
-
-  return { fromEmail, fromName };
-}
 
 function generateRef(): string {
   const now = new Date();
@@ -68,6 +34,7 @@ interface SyncAccount {
   pass: string;
   label: string;
   authType: "password" | "oauth2";
+  provider?: string;
   accessToken?: string;
   refreshToken?: string;
   tokenExpiresAt?: Date;
@@ -164,8 +131,8 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
 
   for (const account of accounts) {
     try {
-      // Clear error and update sync time at start
-      await EmailAccount.findByIdAndUpdate(account.id, { lastError: null, lastSyncedAt: new Date() });
+      // Clear error at start (lastSyncedAt is updated only after successful sync)
+      await EmailAccount.findByIdAndUpdate(account.id, { lastError: null });
 
       // ── Outlook Graph API sync ──
       if (account.authType === "oauth2" && account.provider === "outlook") {
@@ -189,7 +156,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
             const { fromEmail, fromName } = extractForwardedSender(rawOlkFromEmail, rawOlkFromName, body);
 
             const uid = `graph:${gMsg.id}`;
-            const cc = gMsg.ccRecipients?.map((r) => r.emailAddress.address).join(", ") || null;
+            const cc = gMsg.ccRecipients?.map((r: any) => r.emailAddress.address).join(", ") || undefined;
 
             // Skip automated
             if (isAutomatedEmail({ fromEmail, subject, hasListUnsubscribe: false })) {
@@ -259,6 +226,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
 
             for (let idx = 0; idx < extraction.shipments.length; idx++) {
               const s = extraction.shipments[idx];
+              const sender = resolveSender({ fromName, fromEmail, body }, s.fields);
               await Rfq.create({
                 emailId: emailDoc._id,
                 ref: generateRef(),
@@ -273,6 +241,8 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
                 sourceMessageId: gMsg.id,
                 companyId: crm.companyId || undefined,
                 contactId: crm.contactId,
+                resolvedSenderName: sender.name,
+                resolvedSenderEmail: sender.email,
               });
             }
 
@@ -362,9 +332,9 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
             // Layer 1: Replace @oneport365.com sender with forwarded external sender
             const { fromEmail, fromName } = extractForwardedSender(rawFromEmail, rawFromName, body);
 
-            const messageId = normaliseMessageId(parsed.messageId);
-            const inReplyTo = normaliseMessageId(parsed.inReplyTo as string);
-            const cc = parsed.cc ? (Array.isArray(parsed.cc) ? parsed.cc : [parsed.cc]).map((c) => c.text).join(", ") : null;
+            const messageId = normaliseMessageId(parsed.messageId) || undefined;
+            const inReplyTo = normaliseMessageId(parsed.inReplyTo as string) || undefined;
+            const cc = parsed.cc ? (Array.isArray(parsed.cc) ? parsed.cc : [parsed.cc]).map((c: any) => c.text).join(", ") : undefined;
 
             // Build unique UID
             const uid = messageId ? `mid:${messageId}` : `${account.email}:${msg.seq}`;
@@ -543,20 +513,23 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
 
             for (let idx = 0; idx < extraction.shipments.length; idx++) {
               const s = extraction.shipments[idx];
+              const sender = resolveSender({ fromName, fromEmail, body: typeof body === "string" ? body : "" }, s.fields);
               await Rfq.create({
                 emailId: emailDoc._id,
                 ref: generateRef(),
                 emailType: resolvedType,
-                status: s.status,
+                status: s.status as any,
                 fields: s.fields,
                 missingFields: s.missing,
-                followUpDraft: isGroup ? (idx === 0 ? extraction.combinedDraft : null) : (extraction.combinedDraft || s.draft),
+                followUpDraft: (isGroup ? (idx === 0 ? extraction.combinedDraft : undefined) : (extraction.combinedDraft || s.draft)) || undefined,
                 groupId,
                 groupIndex: isGroup ? idx + 1 : undefined,
                 groupTotal: isGroup ? extraction.shipments.length : undefined,
                 sourceMessageId: messageId || undefined,
                 companyId: crm.companyId || undefined,
                 contactId: crm.contactId,
+                resolvedSenderName: sender.name,
+                resolvedSenderEmail: sender.email,
               });
             }
 
