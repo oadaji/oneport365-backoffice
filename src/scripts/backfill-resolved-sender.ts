@@ -6,8 +6,11 @@
  *   npx ts-node -r dotenv/config src/scripts/backfill-resolved-sender.ts
  */
 import mongoose from "mongoose";
+// Import all models to ensure they're registered with Mongoose before populate
+import "../models/email";
+import "../models/company";
+import "../models/contact";
 import { Rfq } from "../models/rfq";
-import { Email } from "../models/email";
 import { resolveSender } from "../lib/resolve-sender";
 
 async function main() {
