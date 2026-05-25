@@ -168,3 +168,10 @@
 - **1.4:** Added `"partial"` and `"stuck"` statuses to Rfq model. Re-extract now compares prior vs new missing fields: replies + no missing → "ready", replies + fewer missing → "partial", replies + same/more missing → "stuck". Frontend renders "partial reply" (amber) and "stalled" (red).
 - **1.5:** Re-extract now updates all sibling RFQs in a multi-shipment group, not just the first. Matches by groupIndex to shipment index. Logs warning if count mismatch.
 - Also removed inline `require()` calls in rfqs.ts re-extract handler (replaced with top-level imports)
+
+### Task 18: Phase 2 — Extraction reliability (tool-use, validation, port codes, caching)
+- **2.1:** Switched `extractWithClaude` from unstructured JSON output to Claude tool-use. Defined `extract_rfq` tool with full JSON schema and `tool_choice: { type: "tool", name: "extract_rfq" }`. Reads structured result from `tool_use` content block — no more regex fence-stripping or `JSON.parse`.
+- **2.2:** Added Zod validation on Claude's tool output. Schema validates all fields (detectedEmailType enum, shipments array structure, field keys). Validation failure returns `status: "error", errorType: "parse"`.
+- **2.3:** HS Code consistency: prompt now instructs Claude to set `ok: true, suggested: true` for AI-suggested HS codes (inferred from commodity). Frontend renders suggested fields with amber "AI" tag, distinct from green check and missing. Suggested codes count as filled for quote readiness.
+- **2.4:** Moved port code resolution out of the prompt into `src/lib/port-codes.ts`. Map of 30+ port names/aliases → "City (LOCODE)" format. Post-processes POL/POD fields after Claude returns. Unit test with 13 assertions (all passing).
+- **2.5:** Enabled prompt caching by splitting static instructions into `system` prompt with `cache_control: { type: "ephemeral" }`. Variable email content stays in `messages`. Should reduce cost on batch syncs.

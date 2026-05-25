@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
+import { postProcessPortCodes } from "./port-codes";
 
 function getAnthropicClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
@@ -8,7 +10,7 @@ function getAnthropicClient() {
 
 export interface SingleExtraction {
   label: string;
-  fields: Array<{ k: string; v: string; ok: boolean }>;
+  fields: Array<{ k: string; v: string; ok: boolean; suggested?: boolean }>;
   missing: string[];
   draft: string | null;
   status: string;
@@ -29,18 +31,81 @@ export interface MultiExtractionError {
 
 export type MultiExtraction = MultiExtractionOk | MultiExtractionError;
 
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
+// ── Zod schema for Claude's tool output ──
 
-export async function extractWithClaude(
-  email: { fromName: string; fromEmail: string; subject: string; body: string },
-  emailTypeHint: string
-): Promise<MultiExtraction> {
-  const cleanBody = stripHtml(email.body).slice(0, 15000);
+const FieldSchema = z.object({
+  k: z.string(),
+  v: z.string(),
+  ok: z.boolean(),
+  suggested: z.boolean().optional(),
+});
 
-  const prompt = `You are a freight operations assistant at OnePort 365, a Nigerian logistics company.
-Analyze this email and extract shipment/RFQ details.
+const ShipmentSchema = z.object({
+  label: z.string(),
+  fields: z.array(FieldSchema),
+  missing: z.array(z.string()),
+  draft: z.string().nullable(),
+  status: z.string(),
+});
+
+const ExtractionSchema = z.object({
+  detectedEmailType: z.enum(["customer-rfq", "rate-reply", "internal-rfq", "outbound", "promotional", "irrelevant"]),
+  shipments: z.array(ShipmentSchema),
+  combinedDraft: z.string().nullable(),
+});
+
+// ── Tool definition for Claude ──
+
+const EXTRACT_RFQ_TOOL: Anthropic.Messages.Tool = {
+  name: "extract_rfq",
+  description: "Extract RFQ shipment details and classify the email type.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      detectedEmailType: {
+        type: "string",
+        enum: ["customer-rfq", "rate-reply", "internal-rfq", "outbound", "promotional", "irrelevant"],
+        description: "Classification of the email type",
+      },
+      shipments: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            label: { type: "string", description: "Short label e.g. 'Cashew nuts · Apapa (NGAPP) → Jebel Ali (AEJEA)'" },
+            fields: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  k: { type: "string", description: "Field key" },
+                  v: { type: "string", description: "Field value" },
+                  ok: { type: "boolean", description: "true if value explicitly stated in email" },
+                  suggested: { type: "boolean", description: "true if value is an AI suggestion (e.g. HS Code inferred from commodity)" },
+                },
+                required: ["k", "v", "ok"],
+              },
+            },
+            missing: { type: "array", items: { type: "string" }, description: "Specific question for each missing required field" },
+            draft: { type: ["string", "null"], description: "Follow-up draft for this shipment, or null" },
+            status: { type: "string", enum: ["info_needed", "ready"], description: "ready if missing=[], else info_needed" },
+          },
+          required: ["label", "fields", "missing", "draft", "status"],
+        },
+      },
+      combinedDraft: {
+        type: ["string", "null"],
+        description: "Single follow-up email covering ALL shipments, or null if nothing missing",
+      },
+    },
+    required: ["detectedEmailType", "shipments", "combinedDraft"],
+  },
+};
+
+// ── Static system prompt (cached) ──
+
+const SYSTEM_PROMPT = `You are a freight operations assistant at OnePort 365, a Nigerian logistics company.
+Analyze emails and extract shipment/RFQ details using the extract_rfq tool.
 
 EMAIL TYPE CLASSIFICATION — classify as ONE of:
 - "customer-rfq": A shipper/importer/exporter asking for a freight rate or shipping quote. The sender NEEDS a service.
@@ -65,9 +130,7 @@ FREIGHT MODE per shipment:
 - "air": airway bill/AWB/air freight/airline/flight/chargeable weight
 - "unknown": insufficient signals
 
-PORT RESOLUTION — resolve to nearest seaport/airport + LOCODE/IATA:
-Ocean: Lagos/Apapa→Apapa(NGAPP), Tin Can→Tin Can(NGTCN), Onne→Onne(NGONE), Warri→Warri(NGWAR), Rotterdam→Rotterdam(NLRTM), Hamburg→Hamburg(DEHAM), Shanghai→Shanghai(CNSHA), Qingdao→Qingdao(CNTAO), Dubai/Jebel Ali→Jebel Ali(AEJEA), Antwerp→Antwerp(BEANR), Istanbul→Ambarlı(TRIST), Tema/Accra→Tema(GHTEM), Mombasa→Mombasa(KEMBA), Singapore→Singapore(SGSIN), Ningbo→Ningbo(CNNGB), Shenzhen/Yantian→Yantian(CNYTN), Busan→Busan(KRPUS), Durban→Durban(ZADUR), Houston→Houston(USHOU), Los Angeles→Los Angeles(USLAX), San Francisco→Oakland(USOAK)
-Air: Lagos→Lagos(LOS), Dubai→Dubai(DXB), London→Heathrow(LHR), Frankfurt→Frankfurt(FRA), Hong Kong→Hong Kong(HKG), Shanghai→Pudong(PVG), Nairobi→Nairobi(NBO)
+PORT RESOLUTION: Resolve port names to nearest seaport/airport with LOCODE/IATA code in format "City (CODE)". Example: "Shanghai (CNSHA)", "Apapa (NGAPP)", "Lagos (LOS)".
 
 EXTRACT 14 FIELDS per shipment:
 1. Customer — sender name
@@ -76,7 +139,7 @@ EXTRACT 14 FIELDS per shipment:
 4. POL — Port of Loading with LOCODE e.g. "Shanghai (CNSHA)"
 5. POD — Port of Discharge with LOCODE e.g. "Apapa (NGAPP)"
 6. Commodity — cargo description
-7. HS Code — if mentioned; if commodity known suggest "<code> (suggested)" with ok=false, do NOT add to missing[]
+7. HS Code — if mentioned use it with ok=true. If commodity is known but HS code not stated, suggest a likely code with ok=true AND suggested=true (e.g. "8471.30"). Do NOT add HS Code to missing[] when a suggestion is provided.
 8. Weight — gross weight in MT or KG
 9. Volume — FCL: container count ("2","3") NEVER ask for CBM on FCL. LCL: CBM. Air: chargeable weight kg.
 10. Pick-up — origin address/city
@@ -86,50 +149,40 @@ EXTRACT 14 FIELDS per shipment:
 14. Target Price — budget/target if mentioned
 
 FIELD RULES:
-- ok=true ONLY if value explicitly stated in email
+- ok=true ONLY if value explicitly stated in email (exception: HS Code suggestions use ok=true, suggested=true)
 - ok=false with v="not specified" if missing
 - Contact/Email NEVER in missing[] — taken from sender
 - status="ready" if missing=[], else "info_needed"
 - If not customer-rfq/internal-rfq/rate-reply, return empty shipments array
 
-FOLLOW-UP DRAFT: If fields missing, generate professional email from "Commercial Team · OnePort 365" asking for missing info. Address by name.
+FOLLOW-UP DRAFT: If fields missing, generate a warm, professional email under 120 words from "Commercial Team · OnePort 365" asking for missing info. Address the customer by name. Use a numbered list for missing items. For multi-shipment, label sections per shipment.`;
 
-Email type hint: ${emailTypeHint}
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function classifyError(err: any): MultiExtractionError["errorType"] {
+  const msg = err?.message || "";
+  if (err?.status === 429 || msg.includes("rate_limit") || msg.includes("429")) return "rate_limit";
+  if (err instanceof SyntaxError || msg.includes("JSON")) return "parse";
+  if (msg.includes("ECONNREFUSED") || msg.includes("ETIMEDOUT") || msg.includes("fetch failed") || msg.includes("network")) return "network";
+  return "unknown";
+}
+
+export async function extractWithClaude(
+  email: { fromName: string; fromEmail: string; subject: string; body: string },
+  emailTypeHint: string
+): Promise<MultiExtraction> {
+  const cleanBody = stripHtml(email.body).slice(0, 15000);
+
+  const userMessage = `Email type hint: ${emailTypeHint}
 From: ${email.fromName} <${email.fromEmail}>
 Subject: ${email.subject}
 
 Body:
 ${cleanBody}
 
-Return ONLY valid JSON:
-{
-  "detectedEmailType": "customer-rfq|rate-reply|internal-rfq|outbound|promotional|irrelevant",
-  "shipments": [
-    {
-      "label": "Short label e.g. 'Cashew nuts · Apapa (NGAPP) → Jebel Ali (AEJEA)'",
-      "fields": [
-        {"k":"Customer","v":"<name>","ok":true},
-        {"k":"Company","v":"<company>","ok":true},
-        {"k":"Freight Mode","v":"Ocean Freight","ok":true},
-        {"k":"POL","v":"Shanghai (CNSHA)","ok":true},
-        {"k":"POD","v":"Apapa (NGAPP)","ok":true},
-        {"k":"Commodity","v":"<description>","ok":true},
-        {"k":"HS Code","v":"<code> or 'not specified'","ok":false},
-        {"k":"Weight","v":"<weight> or 'not specified'","ok":false},
-        {"k":"Volume","v":"<count/CBM> or 'not specified'","ok":false},
-        {"k":"Pick-up","v":"<address> or 'not specified'","ok":false},
-        {"k":"Container","v":"2x40FT or 'not specified'","ok":false},
-        {"k":"Cargo class","v":"General Cargo","ok":true},
-        {"k":"Incoterm","v":"FOB or 'not specified'","ok":false},
-        {"k":"Target Price","v":"<budget> or 'not specified'","ok":false}
-      ],
-      "missing": ["specific question for each missing required field"],
-      "draft": null,
-      "status": "info_needed|ready"
-    }
-  ],
-  "combinedDraft": "single follow-up email covering ALL shipments, or null if nothing missing"
-}`;
+Use the extract_rfq tool to classify this email and extract shipment details.`;
 
   try {
     const client = getAnthropicClient();
@@ -137,17 +190,55 @@ Return ONLY valid JSON:
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 4000,
-      messages: [{ role: "user", content: prompt }],
+      system: [
+        {
+          type: "text",
+          text: SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: userMessage }],
+      tools: [EXTRACT_RFQ_TOOL],
+      tool_choice: { type: "tool", name: "extract_rfq" },
     });
 
-    const text = (response.content[0] as any).text || "";
-    const jsonStr = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    const parsed = JSON.parse(jsonStr);
+    // Find the tool_use content block
+    const toolBlock = response.content.find(
+      (block): block is Anthropic.Messages.ToolUseBlock => block.type === "tool_use" && block.name === "extract_rfq"
+    );
+
+    if (!toolBlock) {
+      return {
+        status: "error" as const,
+        error: "Claude did not return a tool_use block",
+        errorType: "parse",
+      };
+    }
+
+    // Validate with Zod
+    const parseResult = ExtractionSchema.safeParse(toolBlock.input);
+    if (!parseResult.success) {
+      const issues = parseResult.error.issues.map((i: any) => `${i.path.join(".")}: ${i.message}`).join("; ");
+      console.error("Extraction Zod validation failed:", issues);
+      return {
+        status: "error" as const,
+        error: `Validation failed: ${issues}`,
+        errorType: "parse",
+      };
+    }
+
+    const parsed = parseResult.data;
+
+    // Post-process: resolve bare port names to LOCODE format
+    const shipments = parsed.shipments.map((s) => ({
+      ...s,
+      fields: postProcessPortCodes(s.fields),
+    }));
 
     return {
       status: "ok" as const,
-      shipments: parsed.shipments || [],
-      combinedDraft: parsed.combinedDraft || null,
+      shipments,
+      combinedDraft: parsed.combinedDraft,
       detectedEmailType: parsed.detectedEmailType,
     };
   } catch (err: any) {
@@ -155,20 +246,10 @@ Return ONLY valid JSON:
     console.error("  Error:", err?.message || err);
     console.error("  Error type:", err?.constructor?.name);
 
-    let errorType: MultiExtractionError["errorType"] = "unknown";
-    const msg = err?.message || "";
-    if (err?.status === 429 || msg.includes("rate_limit") || msg.includes("429")) {
-      errorType = "rate_limit";
-    } else if (err instanceof SyntaxError || msg.includes("JSON")) {
-      errorType = "parse";
-    } else if (msg.includes("ECONNREFUSED") || msg.includes("ETIMEDOUT") || msg.includes("fetch failed") || msg.includes("network")) {
-      errorType = "network";
-    }
-
     return {
       status: "error" as const,
-      error: msg || "Unknown extraction error",
-      errorType,
+      error: (err?.message as string) || "Unknown extraction error",
+      errorType: classifyError(err),
     };
   }
 }

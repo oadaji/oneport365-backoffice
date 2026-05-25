@@ -7,7 +7,7 @@ interface Rfq {
   ref: string;
   status: string;
   emailType: string;
-  fields: { k: string; v: string; ok: boolean }[];
+  fields: { k: string; v: string; ok: boolean; suggested?: boolean }[];
   missingFields: string[];
   followUpDraft?: string;
   notes?: string;
@@ -403,12 +403,14 @@ function effectiveSender(rfq: Rfq): { name: string; email: string } {
   return { name: em.fromName || em.fromEmail, email: em.fromEmail };
 }
 
-function fieldVal(fields: { k: string; v: string; ok: boolean }[], key: string): string {
+type RfqField = { k: string; v: string; ok: boolean; suggested?: boolean };
+
+function fieldVal(fields: RfqField[], key: string): string {
   const f = fields.find((x) => x.k.toLowerCase().includes(key.toLowerCase()));
   return f?.v && f.v !== "not specified" ? f.v : "";
 }
 
-function fieldObj(fields: { k: string; v: string; ok: boolean }[], key: string) {
+function fieldObj(fields: RfqField[], key: string) {
   return fields.find((x) => x.k.toLowerCase().includes(key.toLowerCase()));
 }
 
@@ -858,6 +860,7 @@ export default function RfqInbox() {
               {QUOTE_REQUIRED.map((key) => {
                 const f = fieldObj(selected.fields || [], key);
                 const hasValue = f && f.ok;
+                const isSuggested = f?.suggested === true;
                 const value = f?.v || "";
                 const isMissing = !hasValue;
 
@@ -871,13 +874,13 @@ export default function RfqInbox() {
                       padding: "6px 8px",
                       marginBottom: 2,
                       borderRadius: 6,
-                      background: isMissing ? "#fffbeb" : "transparent",
-                      border: isMissing ? "1px solid #fde68a" : "1px solid transparent",
+                      background: isMissing ? "#fffbeb" : isSuggested ? "#fef9c3" : "transparent",
+                      border: isMissing ? "1px solid #fde68a" : isSuggested ? "1px solid #fde68a" : "1px solid transparent",
                     }}
                   >
                     <span style={{ fontSize: 11, color: isMissing ? "var(--warn)" : "var(--text3)", fontWeight: 500 }}>{key}</span>
-                    <span style={{ fontSize: 11, color: isMissing ? "var(--warn)" : "var(--text)", fontWeight: 500, textAlign: "right", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {isMissing ? "⚠ missing" : `✓ ${value}`}
+                    <span style={{ fontSize: 11, color: isMissing ? "var(--warn)" : isSuggested ? "#92400e" : "var(--text)", fontWeight: 500, textAlign: "right", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {isMissing ? "⚠ missing" : isSuggested ? `AI ${value}` : `✓ ${value}`}
                     </span>
                   </div>
                 );
