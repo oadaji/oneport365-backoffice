@@ -160,3 +160,11 @@
 - Integrated into both Gmail IMAP and Outlook Graph sync
 - Improved empty/loading states — no blank pane
 - **Commit:** `567f970`
+
+### Task 17: Phase 1 — Correctness bugs in extraction and threading
+- **1.1:** Fixed undefined `fromEmail` variable in `POST /api/gmail/send` (gmail.ts:614) — was referencing out-of-scope variable instead of `from`
+- **1.2:** Extraction failures now create Email documents with `extractionStatus: "failed"` instead of silently skipping. Added `extractionStatus`/`extractionError` fields to Email model. `extractWithClaude` returns discriminated union (`status: "ok"` or `status: "error"` with errorType). Added `POST /api/emails/:id/retry-extraction` endpoint for retrying failed extractions.
+- **1.3:** Extracted `findThreadReplies()` into `src/lib/thread.ts` — shared by both `/thread` and `/re-extract` routes so they use identical `$or` queries (parentEmailId + inReplyTo). Previously `/re-extract` only matched on `parentEmailId`, missing inReplyTo-linked replies.
+- **1.4:** Added `"partial"` and `"stuck"` statuses to Rfq model. Re-extract now compares prior vs new missing fields: replies + no missing → "ready", replies + fewer missing → "partial", replies + same/more missing → "stuck". Frontend renders "partial reply" (amber) and "stalled" (red).
+- **1.5:** Re-extract now updates all sibling RFQs in a multi-shipment group, not just the first. Matches by groupIndex to shipment index. Logs warning if count mismatch.
+- Also removed inline `require()` calls in rfqs.ts re-extract handler (replaced with top-level imports)

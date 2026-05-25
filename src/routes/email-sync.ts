@@ -89,6 +89,26 @@ async function processThread(
     "customer-rfq"
   );
 
+  if (extraction.status === "error") {
+    // Save the email so it can be retried later
+    await Email.create({
+      uid,
+      fromName: effectiveFromName,
+      fromEmail: effectiveFromEmail,
+      subject: thread.subject,
+      body: threadText,
+      emailType: "unknown",
+      receivedAt: thread.lastMessageAt,
+      messageId: thread.threadId,
+      cc: firstMsg.cc || undefined,
+      receivedInbox: accountLabel,
+      extractionStatus: "failed",
+      extractionError: extraction.error,
+    });
+    console.error(`Extraction failed for "${thread.subject.slice(0, 50)}": ${extraction.errorType} — ${extraction.error}`);
+    return { synced: false, skipped: true };
+  }
+
   const resolvedType = extraction.detectedEmailType || "customer-rfq";
   if (resolvedType !== "customer-rfq" && resolvedType !== "internal-rfq") {
     return { synced: false, skipped: true };

@@ -1,6 +1,10 @@
 import { Router, Request, Response } from "express";
 import { Rfq } from "../models/rfq";
 import { Email } from "../models/email";
+import { extractWithClaude } from "../lib/ai-extract";
+import { resolveContact } from "../lib/resolve-contact";
+import { findThreadReplies } from "../lib/thread";
+import crypto from "crypto";
 
 const router = Router();
 
@@ -134,15 +138,7 @@ router.get("/rfqs/:id/thread", async (req: Request, res: Response) => {
     const originalEmail = await Email.findById(rfq.emailId);
     if (!originalEmail) { res.json([]); return; }
 
-    // Find replies (not the original)
-    const replies = await Email.find({
-      $or: [
-        { parentEmailId: originalEmail._id },
-        ...(originalEmail.messageId ? [{ inReplyTo: originalEmail.messageId }] : []),
-      ],
-      _id: { $ne: originalEmail._id },
-    }).sort({ receivedAt: 1 });
-
+    const replies = await findThreadReplies(originalEmail);
     res.json({ replies });
   } catch (err) {
     res.status(500).json({ error: "Failed to get thread" });
@@ -159,8 +155,7 @@ router.post("/rfqs/:id/re-extract", async (req: Request, res: Response) => {
     if (!email) { res.status(400).json({ error: "No email linked" }); return; }
 
     // Build full thread: original email + all replies
-    const { Email: EmailModel } = require("../models/email");
-    const replies = await EmailModel.find({ parentEmailId: email._id }).sort({ receivedAt: 1 });
+    const replies = await findThreadReplies(email);
 
     let threadBody = email.body || "";
     if (replies.length > 0) {
@@ -170,31 +165,156 @@ router.post("/rfqs/:id/re-extract", async (req: Request, res: Response) => {
       threadBody = `Original:\n${email.body}${replyTexts}`;
     }
 
-    const { extractWithClaude } = require("../lib/ai-extract");
+    // Capture prior missing fields for status comparison
+    const priorMissing = rfq.missingFields || [];
+
     const extraction = await extractWithClaude(
       { fromName: email.fromName, fromEmail: email.fromEmail, subject: email.subject, body: threadBody },
       rfq.emailType
     );
 
-    if (extraction.shipments.length > 0) {
+    if (extraction.status === "error") {
+      res.status(502).json({ error: "Extraction failed", details: extraction.error });
+      return;
+    }
+
+    if (extraction.shipments.length === 0) {
+      res.json(rfq);
+      return;
+    }
+
+    // Helper to compute status for a single shipment update
+    function computeStatus(newMissing: string[], priorMissingForSibling: string[], hasReplies: boolean, claudeStatus: string): string {
+      if (!hasReplies) return claudeStatus;
+      if (newMissing.length === 0) return "ready";
+      if (newMissing.length < priorMissingForSibling.length) return "partial";
+      return "stuck";
+    }
+
+    // Multi-shipment: update all siblings in the group
+    if (rfq.groupId) {
+      const siblings = await Rfq.find({ groupId: rfq.groupId }).sort({ groupIndex: 1 });
+
+      if (siblings.length !== extraction.shipments.length) {
+        console.warn(`Re-extract group mismatch: ${siblings.length} siblings vs ${extraction.shipments.length} shipments for groupId=${rfq.groupId}. Updating by best-effort index match.`);
+      }
+
+      let updatedRfq = rfq;
+      for (let idx = 0; idx < siblings.length; idx++) {
+        const sibling = siblings[idx];
+        const shipment = extraction.shipments[idx];
+        if (!shipment) continue; // Claude returned fewer shipments than siblings
+
+        const siblingPriorMissing = sibling.missingFields || [];
+        const newMissing = shipment.missing || [];
+        const newStatus = computeStatus(newMissing, siblingPriorMissing, replies.length > 0, shipment.status);
+
+        const result = await Rfq.findByIdAndUpdate(sibling._id, {
+          status: newStatus as any,
+          fields: shipment.fields,
+          missingFields: newMissing,
+          followUpDraft: idx === 0 ? (extraction.combinedDraft || shipment.draft) : undefined,
+        }, { new: true });
+
+        if (sibling._id.toString() === rfq._id.toString()) {
+          updatedRfq = result || rfq;
+        }
+      }
+
+      res.json(updatedRfq);
+    } else {
+      // Single shipment
       const s = extraction.shipments[0];
-      // Advance status if replies exist
-      let newStatus = s.status;
-      if (replies.length > 0 && s.missing.length === 0) newStatus = "ready";
-      else if (replies.length > 0) newStatus = "replied";
+      const newMissing = s.missing || [];
+      const newStatus = computeStatus(newMissing, priorMissing, replies.length > 0, s.status);
 
       const updated = await Rfq.findByIdAndUpdate(rfq._id, {
         status: newStatus as any,
         fields: s.fields,
-        missingFields: s.missing,
+        missingFields: newMissing,
         followUpDraft: extraction.combinedDraft || s.draft,
       }, { new: true });
       res.json(updated);
-    } else {
-      res.json(rfq);
     }
   } catch (err) {
     res.status(500).json({ error: "Failed to re-extract" });
+  }
+});
+
+// POST /api/emails/:id/retry-extraction — retry extraction on a failed email
+router.post("/emails/:id/retry-extraction", async (req: Request, res: Response) => {
+  try {
+    const email = await Email.findById(req.params.id);
+    if (!email) { res.status(404).json({ error: "Email not found" }); return; }
+    if (email.extractionStatus !== "failed") {
+      res.status(400).json({ error: "Email extraction did not fail — nothing to retry" });
+      return;
+    }
+
+    const extraction = await extractWithClaude(
+      { fromName: email.fromName, fromEmail: email.fromEmail, subject: email.subject, body: email.body },
+      "customer-rfq"
+    );
+
+    if (extraction.status === "error") {
+      await Email.findByIdAndUpdate(email._id, { extractionError: extraction.error });
+      res.status(502).json({ error: "Extraction failed again", details: extraction.error, errorType: extraction.errorType });
+      return;
+    }
+
+    const resolvedType = extraction.detectedEmailType || "irrelevant";
+    if (resolvedType !== "customer-rfq" && resolvedType !== "internal-rfq" && resolvedType !== "rate-reply") {
+      await Email.findByIdAndUpdate(email._id, { extractionStatus: "ok", extractionError: undefined, emailType: resolvedType });
+      res.json({ success: true, skipped: true, reason: `Classified as ${resolvedType}` });
+      return;
+    }
+
+    if (!extraction.shipments || extraction.shipments.length === 0) {
+      await Email.findByIdAndUpdate(email._id, { extractionStatus: "ok", extractionError: undefined, emailType: resolvedType });
+      res.json({ success: true, skipped: true, reason: "No shipments extracted" });
+      return;
+    }
+
+    // Confirmed freight — resolve contact and create RFQs
+    const crm = await resolveContact({ email: email.fromEmail, name: email.fromName, source: "email" });
+
+    await Email.findByIdAndUpdate(email._id, {
+      extractionStatus: "ok",
+      extractionError: undefined,
+      emailType: resolvedType,
+      contactId: crm.contactId,
+    });
+
+    const isGroup = extraction.shipments.length > 1;
+    const groupId = isGroup ? crypto.randomUUID() : undefined;
+    const now = new Date();
+    const yymm = String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, "0");
+
+    const rfqs = [];
+    for (let idx = 0; idx < extraction.shipments.length; idx++) {
+      const s = extraction.shipments[idx];
+      const rand = String(Math.floor(Math.random() * 9000) + 1000);
+      const rfq = await Rfq.create({
+        emailId: email._id,
+        ref: `RFQ-${yymm}-${rand}`,
+        emailType: resolvedType,
+        status: s.status as any,
+        fields: s.fields,
+        missingFields: s.missing,
+        followUpDraft: (isGroup ? (idx === 0 ? extraction.combinedDraft : undefined) : (extraction.combinedDraft || s.draft)) || undefined,
+        groupId,
+        groupIndex: isGroup ? idx + 1 : undefined,
+        groupTotal: isGroup ? extraction.shipments.length : undefined,
+        sourceMessageId: email.messageId || undefined,
+        companyId: crm.companyId || undefined,
+        contactId: crm.contactId,
+      });
+      rfqs.push(rfq);
+    }
+
+    res.json({ success: true, rfqsCreated: rfqs.length });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to retry extraction" });
   }
 });
 

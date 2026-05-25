@@ -14,11 +14,20 @@ export interface SingleExtraction {
   status: string;
 }
 
-export interface MultiExtraction {
+export interface MultiExtractionOk {
+  status: "ok";
   shipments: SingleExtraction[];
   combinedDraft: string | null;
   detectedEmailType?: string;
 }
+
+export interface MultiExtractionError {
+  status: "error";
+  error: string;
+  errorType: "rate_limit" | "parse" | "network" | "unknown";
+}
+
+export type MultiExtraction = MultiExtractionOk | MultiExtractionError;
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -136,6 +145,7 @@ Return ONLY valid JSON:
     const parsed = JSON.parse(jsonStr);
 
     return {
+      status: "ok" as const,
       shipments: parsed.shipments || [],
       combinedDraft: parsed.combinedDraft || null,
       detectedEmailType: parsed.detectedEmailType,
@@ -144,11 +154,21 @@ Return ONLY valid JSON:
     console.error("Claude extraction failed for:", email.subject?.slice(0, 50));
     console.error("  Error:", err?.message || err);
     console.error("  Error type:", err?.constructor?.name);
-    // Return empty shipments + "irrelevant" type so failed extractions are SKIPPED
+
+    let errorType: MultiExtractionError["errorType"] = "unknown";
+    const msg = err?.message || "";
+    if (err?.status === 429 || msg.includes("rate_limit") || msg.includes("429")) {
+      errorType = "rate_limit";
+    } else if (err instanceof SyntaxError || msg.includes("JSON")) {
+      errorType = "parse";
+    } else if (msg.includes("ECONNREFUSED") || msg.includes("ETIMEDOUT") || msg.includes("fetch failed") || msg.includes("network")) {
+      errorType = "network";
+    }
+
     return {
-      shipments: [],
-      combinedDraft: null,
-      detectedEmailType: "irrelevant",
+      status: "error" as const,
+      error: msg || "Unknown extraction error",
+      errorType,
     };
   }
 }

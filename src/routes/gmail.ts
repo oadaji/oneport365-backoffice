@@ -214,6 +214,23 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
               "customer-rfq"
             );
 
+            if (extraction.status === "error") {
+              // Save the email so it can be retried later
+              await Email.create({
+                uid, fromName, fromEmail, subject, body,
+                emailType: "unknown",
+                receivedAt: new Date(gMsg.receivedDateTime),
+                messageId: gMsg.id,
+                cc: cc || undefined,
+                receivedInbox: account.label || account.email,
+                extractionStatus: "failed",
+                extractionError: extraction.error,
+              });
+              console.error(`Extraction failed for "${subject.slice(0, 50)}": ${extraction.errorType} — ${extraction.error}`);
+              totalSkipped++;
+              continue;
+            }
+
             const resolvedType = extraction.detectedEmailType || "irrelevant";
             if (resolvedType !== "customer-rfq" && resolvedType !== "internal-rfq" && resolvedType !== "rate-reply") {
               totalSkipped++;
@@ -408,7 +425,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
                     "customer-rfq"
                   );
 
-                  if (extraction.shipments.length > 0) {
+                  if (extraction.status === "ok" && extraction.shipments.length > 0) {
                     const s = extraction.shipments[0];
                     await Rfq.findByIdAndUpdate(parentRfq._id, {
                       status: s.status,
@@ -450,7 +467,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
                     "customer-rfq"
                   );
 
-                  if (extraction.shipments.length > 0) {
+                  if (extraction.status === "ok" && extraction.shipments.length > 0) {
                     const s = extraction.shipments[0];
                     await Rfq.findByIdAndUpdate(matchRfq._id, {
                       status: s.status,
@@ -471,6 +488,23 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
               { fromName, fromEmail, subject, body: typeof body === "string" ? body : "" },
               "customer-rfq"
             );
+
+            if (extraction.status === "error") {
+              // Save the email so it can be retried later
+              await Email.create({
+                uid, fromName, fromEmail, subject,
+                body: typeof body === "string" ? body : "",
+                emailType: "unknown",
+                receivedAt: parsed.date || new Date(),
+                messageId, cc,
+                receivedInbox: account.label,
+                extractionStatus: "failed",
+                extractionError: extraction.error,
+              });
+              console.error(`Extraction failed for "${subject.slice(0, 50)}": ${extraction.errorType} — ${extraction.error}`);
+              totalSkipped++;
+              continue;
+            }
 
             const resolvedType = extraction.detectedEmailType || "irrelevant";
 
@@ -611,7 +645,7 @@ router.post("/gmail/send", async (req: Request, res: Response) => {
     }
 
     await transporter.sendMail({
-      from: fromEmail,
+      from,
       to,
       cc: cc || undefined,
       subject,

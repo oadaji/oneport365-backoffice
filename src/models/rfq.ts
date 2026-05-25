@@ -10,7 +10,7 @@ export interface IRfq extends Document {
   emailId?: Types.ObjectId;
   ref: string;
   emailType: string;
-  status: "new" | "info_needed" | "ready" | "replied" | "archived";
+  status: "new" | "info_needed" | "ready" | "replied" | "partial" | "stuck" | "archived";
   fields: IRfqField[];
   missingFields: string[];
   followUpDraft?: string;
@@ -30,7 +30,7 @@ const rfqSchema = new Schema<IRfq>(
     emailId: { type: Schema.Types.ObjectId, ref: "Email" },
     ref: { type: String, required: true },
     emailType: { type: String, default: "customer-rfq" },
-    status: { type: String, default: "info_needed", enum: ["new", "info_needed", "ready", "replied", "archived"] },
+    status: { type: String, default: "info_needed", enum: ["new", "info_needed", "ready", "replied", "partial", "stuck", "archived"] },
     fields: { type: Schema.Types.Mixed, default: [] },
     missingFields: { type: Schema.Types.Mixed, default: [] },
     followUpDraft: String,

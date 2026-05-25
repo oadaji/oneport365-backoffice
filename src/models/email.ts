@@ -15,6 +15,8 @@ export interface IEmail extends Document {
   receivedInbox?: string;
   source: "email" | "whatsapp";
   whatsappPhone?: string;
+  extractionStatus?: "ok" | "failed" | "pending";
+  extractionError?: string;
   contactId?: Types.ObjectId;
   createdAt: Date;
 }
@@ -35,6 +37,8 @@ const emailSchema = new Schema<IEmail>(
     receivedInbox: String,
     source: { type: String, default: "email", enum: ["email", "whatsapp"] },
     whatsappPhone: String,
+    extractionStatus: { type: String, enum: ["ok", "failed", "pending"], default: "ok" },
+    extractionError: String,
     contactId: { type: Schema.Types.ObjectId, ref: "Contact" },
   },
   { timestamps: true }

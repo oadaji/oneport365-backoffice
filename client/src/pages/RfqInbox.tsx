@@ -425,6 +425,8 @@ function fmtTime(dateStr: string) {
 function statusLabel(status: string) {
   if (status === "ready") return { cls: "b-ok", text: "ready" };
   if (status === "replied") return { cls: "b-wait", text: "replied" };
+  if (status === "partial") return { cls: "b-wait", text: "partial reply" };
+  if (status === "stuck") return { cls: "b-miss", text: "stalled" };
   if (status === "archived") return { cls: "b-gray", text: "archived" };
   return { cls: "b-miss", text: "info needed" };
 }
