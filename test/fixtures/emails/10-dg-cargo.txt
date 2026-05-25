@@ -1,0 +1,20 @@
+From: Klaus Weber <klaus@chemtrade.de>
+Subject: Dangerous goods shipment Hamburg to Onne
+
+Hello,
+
+We require a quote for shipping dangerous goods:
+
+Commodity: Industrial adhesives
+UN Number: UN 1133
+DG Class: 3.1 (Flammable liquid)
+Container: 1x20FT
+Weight: 14 MT
+Route: Hamburg to Onne port
+Incoterm: DAP Onne
+Target price: EUR 2,800
+
+Please confirm you can handle Class 3 DG cargo.
+
+Klaus Weber
+ChemTrade GmbH, Hamburg

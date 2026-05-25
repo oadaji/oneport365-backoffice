@@ -411,12 +411,14 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
               }
             }
 
-            // Subject-based threading fallback for "Re:" emails
+            // Subject-based threading fallback for "Re:" emails (30-day window)
             if (subject.toLowerCase().startsWith("re:")) {
               const baseSubject = subject.replace(/^(re:\s*)+/i, "").trim();
+              const thirtyDaysAgo = new Date(Date.now() - 30 * 86400_000);
               const matchEmail = await Email.findOne({
                 fromEmail,
                 subject: new RegExp(`^${baseSubject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+                receivedAt: { $gte: thirtyDaysAgo },
               }).sort({ _id: -1 });
 
               if (matchEmail) {

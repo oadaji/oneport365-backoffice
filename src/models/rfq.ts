@@ -4,6 +4,7 @@ export interface IRfqField {
   k: string;
   v: string;
   ok: boolean;
+  suggested?: boolean;
 }
 
 export interface IRfq extends Document {
@@ -34,8 +35,17 @@ const rfqSchema = new Schema<IRfq>(
     ref: { type: String, required: true },
     emailType: { type: String, default: "customer-rfq" },
     status: { type: String, default: "info_needed", enum: ["new", "info_needed", "ready", "replied", "partial", "stuck", "archived"] },
-    fields: { type: Schema.Types.Mixed, default: [] },
-    missingFields: { type: Schema.Types.Mixed, default: [] },
+    fields: {
+      type: [{
+        k: { type: String, required: true },
+        v: { type: String, required: true },
+        ok: { type: Boolean, required: true },
+        suggested: { type: Boolean },
+        _id: false,
+      }],
+      default: [],
+    },
+    missingFields: { type: [String], default: [] },
     followUpDraft: String,
     notes: String,
     groupId: String,

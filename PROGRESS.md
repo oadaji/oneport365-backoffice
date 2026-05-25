@@ -184,3 +184,8 @@
 - **3.5:** Removed `@ts-nocheck` from gmail.ts. Fixed 13 type errors: added `provider` to SyncAccount interface, coerced `cc`/`messageId`/`inReplyTo` from `null` to `undefined`, added type assertions for Rfq status. All clean.
 - **3.6:** Consolidated send-followup to use EmailAccount model. Looks up sender by `receivedInbox` (the inbox the RFQ was received on), falls back to first active account. Removed env var (`GMAIL_ADDRESS`/`GMAIL_APP_PASSWORD`) dependency. Uses `resolvedSenderEmail` for To address.
 - **3.7:** Fixed sync timestamp ordering: `lastSyncedAt` now updated only at END of successful sync, not at start. Prevents skipped emails on mid-sync failures.
+
+### Task 20: Phase 5 — Smaller items (threading, schema, eval harness)
+- **5.1:** Tightened subject-based threading fallback: added `receivedAt: { $gte: 30 days ago }` to prevent cross-matching RFQs with identical subjects months apart.
+- **5.2:** Replaced `Schema.Types.Mixed` for `fields` and `missingFields` in Rfq model with typed subdocument schemas. Fields now enforce `{ k: String required, v: String required, ok: Boolean required, suggested: Boolean optional }`. `missingFields` is `[String]`. Added `suggested?: boolean` to `IRfqField` interface.
+- **5.3:** Added extraction eval harness with 10 fixture emails covering: ocean FCL import, air freight, internal forward, rate reply, promotional, outbound, multi-shipment, irrelevant, LCL, and DG cargo. Run with: `npx ts-node -r dotenv/config src/lib/__tests__/extraction-eval.ts` (calls live Claude API).
