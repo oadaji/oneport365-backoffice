@@ -882,11 +882,21 @@ export default function RfqInbox() {
             </div>
 
             <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
-              {/* Direction badge */}
-              <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                <span className="badge b-gray">🚢 Not specified</span>
-                <span className="badge b-ok">🔻 {detectDirection(selected.fields || [])}</span>
-              </div>
+              {/* Freight mode + direction badges */}
+              {(() => {
+                const mode = fieldVal(selected.fields || [], "freight mode");
+                const isAir = mode.toLowerCase().includes("air");
+                const isOcean = mode.toLowerCase().includes("ocean");
+                const modeIcon = isAir ? "✈" : "🚢";
+                const modeText = isAir ? "Air Freight" : isOcean ? "Ocean Freight" : "Not specified";
+                const modeCls = (isAir || isOcean) ? "b-ok" : "b-gray";
+                return (
+                  <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                    <span className={`badge ${modeCls}`}>{modeIcon} {modeText}</span>
+                    <span className="badge b-ok">🔻 {detectDirection(selected.fields || [])}</span>
+                  </div>
+                );
+              })()}
 
               {/* Quote readiness */}
               {(() => {
