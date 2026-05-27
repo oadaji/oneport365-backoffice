@@ -450,9 +450,18 @@ export default function RfqInbox() {
   const [briefOpen, setBriefOpen] = useState(false);
   const [threadReplies, setThreadReplies] = useState<any[]>([]);
   const [reExtracting, setReExtracting] = useState(false);
+  const [replyFrom, setReplyFrom] = useState("");
+  const [replyCc, setReplyCc] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+  const [senderAccounts, setSenderAccounts] = useState<string[]>([]);
 
   useEffect(() => {
     loadRfqs(true);
+    api.get("/email-accounts").then(({ data }) => {
+      const emails = data.filter((a: any) => a.active).map((a: any) => a.email);
+      setSenderAccounts(emails);
+      if (emails.length > 0) setReplyFrom(emails[0]);
+    }).catch(() => {});
   }, []);
 
   const loadRfqs = (autoSelect = false) => {
@@ -780,8 +789,38 @@ export default function RfqInbox() {
                   </div>
                   <button onClick={() => setShowReply(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--text3)" }}>×</button>
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600 }}>TO</span>&nbsp;&nbsp;{getSender(selected).email}
+                {/* From */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>
+                  <span style={{ fontWeight: 600, width: 36 }}>FROM</span>
+                  {senderAccounts.length > 1 ? (
+                    <select
+                      value={replyFrom}
+                      onChange={(e) => setReplyFrom(e.target.value)}
+                      style={{ flex: 1, padding: "4px 8px", fontSize: 11, border: "1px solid var(--border)", borderRadius: 4, outline: "none", color: "var(--text)", background: "var(--surface)" }}
+                    >
+                      {senderAccounts.map((email) => (
+                        <option key={email} value={email}>{email}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span style={{ color: "var(--text)" }}>{replyFrom || "No account configured"}</span>
+                  )}
+                </div>
+                {/* To */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>
+                  <span style={{ fontWeight: 600, width: 36 }}>TO</span>
+                  <span style={{ color: "var(--text)" }}>{getSender(selected).email}</span>
+                </div>
+                {/* CC */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text3)", marginBottom: 8 }}>
+                  <span style={{ fontWeight: 600, width: 36 }}>CC</span>
+                  <input
+                    type="text"
+                    value={replyCc}
+                    onChange={(e) => setReplyCc(e.target.value)}
+                    placeholder="email@example.com, another@example.com"
+                    style={{ flex: 1, padding: "4px 8px", fontSize: 11, border: "1px solid var(--border)", borderRadius: 4, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                  />
                 </div>
                 <textarea
                   value={replyDraft}
@@ -789,8 +828,30 @@ export default function RfqInbox() {
                   style={{ width: "100%", minHeight: 100, padding: 10, fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, fontFamily: "Inter, sans-serif", resize: "vertical", outline: "none", color: "var(--text)" }}
                 />
                 <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
-                  <button className="btn btn-primary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    ▸ Send
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ display: "flex", alignItems: "center", gap: 4 }}
+                    disabled={sendingReply || !replyFrom}
+                    onClick={async () => {
+                      if (!selected || !replyDraft.trim()) return;
+                      setSendingReply(true);
+                      try {
+                        await api.post(`/rfqs/${selected._id}/send-followup`, {
+                          draft: replyDraft,
+                          fromEmail: replyFrom,
+                          cc: replyCc || undefined,
+                        });
+                        setShowReply(false);
+                        setReplyCc("");
+                        loadRfqs();
+                      } catch (err: any) {
+                        alert(err.response?.data?.error || "Failed to send");
+                      } finally {
+                        setSendingReply(false);
+                      }
+                    }}
+                  >
+                    {sendingReply ? "Sending..." : "▸ Send"}
                   </button>
                   <button className="btn btn-sm" onClick={() => setShowReply(false)}>Discard</button>
                 </div>

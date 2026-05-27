@@ -102,13 +102,15 @@ router.post("/rfqs/:id/send-followup", async (req: Request, res: Response) => {
     if (!rfq) { res.status(404).json({ error: "RFQ not found" }); return; }
 
     const email = rfq.emailId as any;
-    const { draft, cc } = req.body;
+    const { draft, cc, fromEmail } = req.body;
 
-    // Look up sender account: prefer the inbox this RFQ was received on, fall back to first active
-    const receivedInbox = email?.receivedInbox;
-    let senderAccount = receivedInbox
-      ? await EmailAccount.findOne({ email: receivedInbox, active: true })
+    // Look up sender account: prefer user's choice, then receivedInbox, then first active
+    let senderAccount = fromEmail
+      ? await EmailAccount.findOne({ email: fromEmail, active: true })
       : null;
+    if (!senderAccount && email?.receivedInbox) {
+      senderAccount = await EmailAccount.findOne({ email: email.receivedInbox, active: true });
+    }
     if (!senderAccount) {
       senderAccount = await EmailAccount.findOne({ active: true });
     }
