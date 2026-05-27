@@ -792,19 +792,15 @@ export default function RfqInbox() {
                 {/* From */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>
                   <span style={{ fontWeight: 600, width: 36 }}>FROM</span>
-                  {senderAccounts.length > 1 ? (
-                    <select
-                      value={replyFrom}
-                      onChange={(e) => setReplyFrom(e.target.value)}
-                      style={{ flex: 1, padding: "4px 8px", fontSize: 11, border: "1px solid var(--border)", borderRadius: 4, outline: "none", color: "var(--text)", background: "var(--surface)" }}
-                    >
-                      {senderAccounts.map((email) => (
-                        <option key={email} value={email}>{email}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span style={{ color: "var(--text)" }}>{replyFrom || "No account configured"}</span>
-                  )}
+                  <select
+                    value={replyFrom}
+                    onChange={(e) => setReplyFrom(e.target.value)}
+                    style={{ flex: 1, padding: "4px 8px", fontSize: 11, border: "1px solid var(--border)", borderRadius: 4, outline: "none", color: "var(--text)", background: "var(--surface)" }}
+                  >
+                    {senderAccounts.map((email) => (
+                      <option key={email} value={email}>{email}</option>
+                    ))}
+                  </select>
                 </div>
                 {/* To */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>
