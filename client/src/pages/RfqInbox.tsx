@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Mail, RefreshCw, Archive, Trash2, X } from "lucide-react";
+import { Mail, RefreshCw, Trash2, X } from "lucide-react";
 import api from "../lib/api";
 
 interface Rfq {
@@ -516,12 +516,6 @@ export default function RfqInbox() {
     setSelected(null);
   };
 
-  const deleteRfq = async (id: string) => {
-    if (!window.confirm("Delete this RFQ permanently?")) return;
-    await api.delete(`/rfqs/${id}`);
-    loadRfqs();
-    setSelected(null);
-  };
 
   const generateQuote = async (rfqId: string) => {
     setGenerating(true);
@@ -808,11 +802,8 @@ export default function RfqInbox() {
               <button className="btn btn-sm" onClick={() => { setShowReply(true); if (selected.followUpDraft) setReplyDraft(selected.followUpDraft); }}>
                 ← Reply
               </button>
-              <button className="btn btn-sm" onClick={() => archiveRfq(selected._id)}>
-                <Archive size={12} style={{ marginRight: 4 }} /> Archive
-              </button>
-              <button className="btn btn-sm btn-danger" onClick={() => deleteRfq(selected._id)}>
-                <Trash2 size={12} style={{ marginRight: 4 }} /> Remove
+              <button className="btn btn-sm btn-danger" onClick={() => archiveRfq(selected._id)}>
+                <Trash2 size={12} style={{ marginRight: 4 }} /> Not RFQ
               </button>
             </div>
           </>
