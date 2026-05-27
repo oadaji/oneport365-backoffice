@@ -452,16 +452,19 @@ export default function RfqInbox() {
   const [reExtracting, setReExtracting] = useState(false);
 
   useEffect(() => {
-    loadRfqs();
+    loadRfqs(true);
   }, []);
 
-  const loadRfqs = () => {
+  const loadRfqs = (autoSelect = false) => {
     setLoading(true);
     api.get("/rfqs").then((res) => {
       const data = Array.isArray(res.data) ? res.data : [];
       const filtered = data.filter((r: Rfq) => r.emailType === "customer-rfq" || r.emailType === "internal-rfq");
       setRfqs(filtered);
       setLoading(false);
+      if (autoSelect && filtered.length > 0 && !selected) {
+        selectRfq(filtered[0]);
+      }
     }).catch(() => setLoading(false));
   };
 
