@@ -782,7 +782,7 @@ export default function RfqInbox() {
 
             {/* Reply compose tray */}
             {showReply && (
-              <div style={{ borderTop: "2px solid var(--accent)", padding: "12px 20px", background: "#f8faf8" }}>
+              <div style={{ borderTop: "2px solid var(--accent)", padding: "12px 20px", background: "#f8faf8", maxHeight: "40vh", overflowY: "auto", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
                     ← Reply
