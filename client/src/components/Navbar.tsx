@@ -98,9 +98,9 @@ export default function Navbar() {
           onClick={() => navigate("/settings")}
         >
           <div style={{ width: 26, height: 26, borderRadius: "50%", backgroundColor: "#7AB648", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 10, fontWeight: 700 }}>
-            OA
+            S
           </div>
-          <span style={{ color: "#c0d0c0", fontSize: 12, fontWeight: 500 }}>Okpanachi Adaji</span>
+          <span style={{ color: "#c0d0c0", fontSize: 12, fontWeight: 500 }}>Sales</span>
         </div>
       </div>
     </nav>
