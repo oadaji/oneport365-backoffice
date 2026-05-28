@@ -4,7 +4,7 @@ import { Email } from "../models/email";
 import { extractWithClaude } from "../lib/ai-extract";
 import { resolveContact } from "../lib/resolve-contact";
 import { EmailAccount } from "../models/email-account";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import { findThreadReplies } from "../lib/thread";
 import { resolveSender } from "../lib/resolve-sender";
 import crypto from "crypto";
@@ -104,37 +104,28 @@ router.post("/rfqs/:id/send-followup", async (req: Request, res: Response) => {
     const email = rfq.emailId as any;
     const { draft, cc, fromEmail } = req.body;
 
-    // Look up sender account: prefer user's choice, then receivedInbox, then first active
-    let senderAccount = fromEmail
-      ? await EmailAccount.findOne({ email: fromEmail, active: true })
-      : null;
-    if (!senderAccount && email?.receivedInbox) {
-      senderAccount = await EmailAccount.findOne({ email: email.receivedInbox, active: true });
-    }
-    if (!senderAccount) {
-      senderAccount = await EmailAccount.findOne({ active: true });
-    }
-    if (!senderAccount) {
-      res.status(400).json({ error: "No email account configured — add one via Email Monitoring first" });
+    const resendKey = process.env.RESEND_API_KEY;
+    if (!resendKey) {
+      res.status(400).json({ error: "RESEND_API_KEY not configured" });
       return;
     }
 
-    const isOutlook = senderAccount.provider === "outlook";
-    const transporter = nodemailer.createTransport({
-      host: isOutlook ? "smtp.office365.com" : "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: { user: senderAccount.email, pass: senderAccount.password },
-    });
-
+    const resend = new Resend(resendKey);
+    const senderEmail = fromEmail || email?.receivedInbox || "onboarding@resend.dev";
     const toAddress = rfq.resolvedSenderEmail || email?.fromEmail;
-    await transporter.sendMail({
-      from: senderAccount.email,
+
+    const { error: sendError } = await resend.emails.send({
+      from: senderEmail,
       to: toAddress,
       cc: cc || undefined,
       subject: `Re: ${email?.subject || ""}`,
       text: draft,
     });
+
+    if (sendError) {
+      res.status(502).json({ error: "Failed to send email", details: sendError.message });
+      return;
+    }
 
     await Rfq.findByIdAndUpdate(rfq._id, { status: "replied", followUpDraft: draft });
     res.json({ success: true });
