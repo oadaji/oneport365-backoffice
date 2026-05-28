@@ -609,12 +609,12 @@ router.post("/gmail/send", async (req: Request, res: Response) => {
         },
       } as any);
     } else {
-      // Gmail / IMAP app password SMTP
+      // Gmail / IMAP app password SMTP — use port 587 (STARTTLS) for Railway compatibility
       const isOutlook = dbAccount.provider === "outlook";
       transporter = nodemailer.createTransport({
         host: isOutlook ? "smtp.office365.com" : "smtp.gmail.com",
-        port: isOutlook ? 587 : 465,
-        secure: !isOutlook,
+        port: 587,
+        secure: false,
         auth: { user: from, pass: dbAccount.password },
       });
     }

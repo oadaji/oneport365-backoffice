@@ -122,8 +122,8 @@ router.post("/rfqs/:id/send-followup", async (req: Request, res: Response) => {
     const isOutlook = senderAccount.provider === "outlook";
     const transporter = nodemailer.createTransport({
       host: isOutlook ? "smtp.office365.com" : "smtp.gmail.com",
-      port: isOutlook ? 587 : 465,
-      secure: !isOutlook,
+      port: 587,
+      secure: false,
       auth: { user: senderAccount.email, pass: senderAccount.password },
     });
 
