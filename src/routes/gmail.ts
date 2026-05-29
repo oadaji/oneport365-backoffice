@@ -306,7 +306,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
         for (const keyword of shippingKeywords) {
           try {
             const uids = await client.search({ since: sinceDate, subject: keyword }, { uid: true });
-            keywordHits[keyword] = uids?.length || 0;
+            keywordHits[keyword] = Array.isArray(uids) ? uids.length : 0;
             if (uids) for (const uid of uids) allUids.add(uid);
           } catch { /* some keywords may fail, continue */ }
         }
