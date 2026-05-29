@@ -3,6 +3,7 @@ import cors from "cors";
 import path from "path";
 import routes from "./routes";
 import { authMiddleware, generateToken } from "./middleware/auth";
+import { microsoftAuthRouter } from "./routes/microsoft-auth";
 
 const app = express();
 
@@ -23,6 +24,9 @@ app.post("/api/auth/login", (req, res) => {
     res.status(401).json({ error: "Wrong password" });
   }
 });
+
+// Microsoft OAuth routes (before auth middleware — callback has no token)
+app.use("/api", microsoftAuthRouter);
 
 // Auth middleware — protects all API routes
 app.use(authMiddleware);
