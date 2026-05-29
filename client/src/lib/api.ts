@@ -14,13 +14,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// On 401, clear token and reload to show login screen
+// On 401, clear token and reload — except on the login endpoint itself
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("app-token");
-      window.location.reload();
+      const isLogin = error.config?.url?.includes("/auth/login");
+      if (!isLogin) {
+        localStorage.removeItem("app-token");
+        window.location.reload();
+      }
     }
     return Promise.reject(error);
   }
