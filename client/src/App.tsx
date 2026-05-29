@@ -83,9 +83,11 @@ function LoginScreen() {
 }
 
 export default function App() {
-  const [authed, setAuthed] = useState<boolean | null>(null);
+  const isDev = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  const [authed, setAuthed] = useState<boolean | null>(isDev ? true : null);
 
   useEffect(() => {
+    if (isDev) return; // Skip auth check on localhost
     const token = localStorage.getItem("app-token");
     if (!token) {
       setAuthed(false);
@@ -103,7 +105,7 @@ export default function App() {
           setAuthed(true);
         }
       });
-  }, []);
+  }, [isDev]);
 
   // Loading state while checking auth
   if (authed === null) return null;
@@ -111,7 +113,7 @@ export default function App() {
   if (!authed) return <LoginScreen />;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "row", height: "100vh", overflow: "hidden" }}>
       <Navbar />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <Routes>

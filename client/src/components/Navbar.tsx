@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Mail, MessageCircle, FileText } from "lucide-react";
+import { Mail, MessageCircle, FileText, DollarSign, Users, Settings } from "lucide-react";
 import api from "../lib/api";
 
 export default function Navbar() {
@@ -28,56 +28,86 @@ export default function Navbar() {
   };
 
   const navItems = [
-    { path: "/crm", label: "CRM", count: counts.companies, icon: null },
-    { path: "/", label: "", icon: Mail, count: counts.rfqs },
-    { path: "/whatsapp", label: "", icon: MessageCircle, count: 5 },
-    { path: "/rates", label: "$ Rates", icon: null, count: null },
-    { path: "/quotes", label: "Quotes", icon: FileText, count: counts.quotes },
+    { path: "/crm", title: "CRM", count: counts.companies, icon: Users },
+    { path: "/", title: "RFQ Inbox", icon: Mail, count: counts.rfqs },
+    { path: "/whatsapp", title: "WhatsApp", icon: MessageCircle, count: 5 },
+    { path: "/rates", title: "Rates", icon: DollarSign, count: null },
+    { path: "/quotes", title: "Quotes", icon: FileText, count: counts.quotes },
   ];
 
   return (
-    <nav style={{ height: 48, backgroundColor: "#1a2d1c", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", flexShrink: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
-        {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginRight: 20, cursor: "pointer" }} onClick={() => navigate("/")}>
-          <img src="/oneport365-logo.png" alt="OnePort 365" style={{ height: 28, width: "auto" }} />
-        </div>
+    <nav style={{
+      width: 52,
+      backgroundColor: "#1a2d1c",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      paddingTop: 12,
+      paddingBottom: 12,
+      flexShrink: 0,
+      height: "100vh",
+      boxSizing: "border-box",
+    }}>
+      {/* Logo */}
+      <div
+        style={{ marginBottom: 20, cursor: "pointer", padding: 4 }}
+        onClick={() => navigate("/")}
+        title="OnePort 365"
+      >
+        <img src="/oneport365-logo.png" alt="OnePort 365" style={{ height: 24, width: "auto" }} />
+      </div>
 
-        {/* Nav items */}
+      {/* Nav items */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 1 }}>
         {navItems.map((item) => {
           const active = isActive(item.path);
           const Icon = item.icon;
           return (
             <div
-              key={item.path + item.label}
+              key={item.path}
               onClick={() => navigate(item.path)}
+              title={item.title}
               style={{
+                position: "relative",
                 display: "flex",
                 alignItems: "center",
-                gap: 5,
-                padding: "0 12px",
-                height: 48,
+                justifyContent: "center",
+                width: 36,
+                height: 36,
+                borderRadius: 8,
                 cursor: "pointer",
                 color: active ? "#fff" : "#8a9e8a",
-                fontWeight: 500,
-                fontSize: 12,
-                transition: "color 0.1s",
+                backgroundColor: active ? "#2d5225" : "transparent",
+                transition: "background-color 0.15s, color 0.15s",
               }}
-              onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = "#c0d0c0"; }}
-              onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = "#8a9e8a"; }}
+              onMouseEnter={(e) => {
+                if (!active) {
+                  e.currentTarget.style.backgroundColor = "#243d1f";
+                  e.currentTarget.style.color = "#c0d0c0";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!active) {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                  e.currentTarget.style.color = "#8a9e8a";
+                }
+              }}
             >
-              {Icon && <Icon size={14} />}
-              {item.label && <span>{item.label}</span>}
-              {item.count !== null && item.count !== undefined && (
+              <Icon size={18} />
+              {item.count !== null && item.count !== undefined && item.count > 0 && (
                 <span style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  padding: "1px 6px",
-                  borderRadius: 8,
-                  background: active ? "#7AB648" : "#2d5225",
-                  color: active ? "#fff" : "#8a9e8a",
-                  minWidth: 18,
+                  position: "absolute",
+                  top: 2,
+                  right: 2,
+                  fontSize: 8,
+                  fontWeight: 700,
+                  padding: "0px 4px",
+                  borderRadius: 6,
+                  background: "#7AB648",
+                  color: "#fff",
+                  minWidth: 14,
                   textAlign: "center",
+                  lineHeight: "14px",
                 }}>
                   {item.count}
                 </span>
@@ -87,20 +117,33 @@ export default function Navbar() {
         })}
       </div>
 
-      {/* Live indicator + User chip */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#7AB648", fontWeight: 500 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: "#7AB648", display: "inline-block" }} />
-          Live
-        </div>
+      {/* Bottom section: Live + Settings */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+        <span
+          style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#7AB648", display: "inline-block" }}
+          title="Live"
+        />
         <div
-          style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 10px", borderRadius: 20, border: "1px solid #2d5225" }}
           onClick={() => navigate("/settings")}
+          title="Settings"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: "50%",
+            backgroundColor: isActive("/settings") ? "#7AB648" : "#2d5225",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#fff",
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: "pointer",
+            transition: "background-color 0.15s",
+          }}
+          onMouseEnter={(e) => { if (!isActive("/settings")) e.currentTarget.style.backgroundColor = "#3d6a2d"; }}
+          onMouseLeave={(e) => { if (!isActive("/settings")) e.currentTarget.style.backgroundColor = "#2d5225"; }}
         >
-          <div style={{ width: 26, height: 26, borderRadius: "50%", backgroundColor: "#7AB648", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 10, fontWeight: 700 }}>
-            S
-          </div>
-          <span style={{ color: "#c0d0c0", fontSize: 12, fontWeight: 500 }}>Sales</span>
+          S
         </div>
       </div>
     </nav>
