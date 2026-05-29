@@ -317,17 +317,6 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
 
         {connectMode === "outlook" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {/* Azure redirect URI */}
-            {redirectUri && (
-              <div style={{
-                fontSize: 11, color: "#1e40af", background: "#dbeafe", padding: "10px 14px",
-                borderRadius: 8, lineHeight: 1.6, border: "1px solid #93c5fd",
-              }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Azure redirect URI (register this in your Azure app):</div>
-                <code style={{ fontSize: 11, wordBreak: "break-all" }}>{redirectUri}</code>
-              </div>
-            )}
-
             {/* Sign in with Microsoft */}
             <button
               className="btn"
