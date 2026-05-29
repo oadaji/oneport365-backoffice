@@ -17,6 +17,8 @@ router.get("/auth/microsoft", async (_req: Request, res: Response) => {
     }
     const shared = _req.query.shared === "true" ? "shared" : "";
     const url = await getAuthUrl(shared);
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.set("Pragma", "no-cache");
     res.redirect(url);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to generate auth URL", details: err.message });

@@ -1,4 +1,5 @@
 import * as msal from "@azure/msal-node";
+import crypto from "crypto";
 
 const clientId = process.env.MICROSOFT_CLIENT_ID || "";
 const clientSecret = process.env.MICROSOFT_CLIENT_SECRET || "";
@@ -33,6 +34,7 @@ export async function getAuthUrl(state?: string): Promise<string> {
     redirectUri,
     state: state || "",
     prompt: "consent",
+    correlationId: crypto.randomUUID(),
   });
 }
 
