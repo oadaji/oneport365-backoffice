@@ -491,11 +491,17 @@ export default function RfqInbox() {
 
   const selectRfq = async (r: Rfq) => {
     setSelected(r);
-    setShowReply(false);
     setBriefOpen(false);
     setThreadReplies([]);
     if (r.followUpDraft) setReplyDraft(r.followUpDraft);
     else setReplyDraft("");
+
+    // Auto-open compose for info_needed with a draft
+    if (r.status === "info_needed" && r.followUpDraft) {
+      setShowReply(true);
+    } else {
+      setShowReply(false);
+    }
 
     // Load thread replies
     try {
@@ -781,14 +787,21 @@ export default function RfqInbox() {
             </div>
 
             {/* Reply compose tray */}
-            {showReply && (
+            {showReply && (() => {
+              const isResend = selected.status === "replied";
+              return (
               <div style={{ borderTop: "2px solid var(--accent)", padding: "12px 20px", background: "#f8faf8", maxHeight: "40vh", overflowY: "auto", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
-                    ← Reply
+                    {isResend ? "↩ Send Again" : "← Reply"}
                   </div>
                   <button onClick={() => setShowReply(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--text3)" }}>×</button>
                 </div>
+                {isResend && (
+                  <div style={{ fontSize: 11, color: "#92400e", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 6, padding: "8px 12px", marginBottom: 10, lineHeight: 1.5 }}>
+                    A follow-up was already sent to this customer. Edit the draft below and send another.
+                  </div>
+                )}
                 {/* From */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>
                   <span style={{ fontWeight: 600, width: 36 }}>FROM</span>
@@ -847,17 +860,21 @@ export default function RfqInbox() {
                       }
                     }}
                   >
-                    {sendingReply ? "Sending..." : "▸ Send"}
+                    {sendingReply ? "Sending..." : isResend ? "↩ Send Again" : "▸ Send"}
                   </button>
                   <button className="btn btn-sm" onClick={() => setShowReply(false)}>Discard</button>
+                  {!isResend && selected.status === "info_needed" && (
+                    <span style={{ fontSize: 10, color: "var(--text3)", marginLeft: "auto" }}>Review and send when ready</span>
+                  )}
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* Action bar */}
             <div style={{ padding: "8px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, background: "#f8faf8" }}>
               <button className="btn btn-sm" onClick={() => { setShowReply(true); if (selected.followUpDraft) setReplyDraft(selected.followUpDraft); }}>
-                ← Reply
+                {selected.status === "replied" ? "↩ Send Again" : "← Reply"}
               </button>
               <button className="btn btn-sm btn-danger" onClick={() => archiveRfq(selected._id)}>
                 <Trash2 size={12} style={{ marginRight: 4 }} /> Not RFQ
