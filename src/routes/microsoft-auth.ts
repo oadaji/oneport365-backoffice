@@ -27,10 +27,13 @@ router.get("/auth/microsoft", async (_req: Request, res: Response) => {
 
 // GET /api/auth/microsoft/callback — exchange code for tokens, create/update email account
 router.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.set("Pragma", "no-cache");
   try {
     const code = req.query.code as string;
     if (!code) {
-      res.status(400).json({ error: "Missing authorization code" });
+      // No code — redirect to start the OAuth flow instead of showing error
+      res.redirect("/api/auth/microsoft");
       return;
     }
 
