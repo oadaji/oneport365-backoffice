@@ -87,7 +87,20 @@ export default function Navbar() {
         style={{ marginBottom: 20, cursor: "pointer", padding: 4 }}
         onClick={() => navigate("/")}
       >
-        <img src="/logo-icon.png" alt="OnePort 365" style={{ height: 28, width: "auto", filter: "brightness(10)" }} />
+        <svg width="36" height="36" viewBox="0 0 100 100" fill="none">
+          {/* Speed lines */}
+          <line x1="2" y1="42" x2="28" y2="42" stroke="#7AB648" strokeWidth="4" strokeLinecap="round"/>
+          <line x1="6" y1="50" x2="30" y2="50" stroke="#7AB648" strokeWidth="4" strokeLinecap="round"/>
+          <line x1="2" y1="58" x2="28" y2="58" stroke="#7AB648" strokeWidth="4" strokeLinecap="round"/>
+          {/* Outer hexagon */}
+          <path d="M55 12 L85 27 L85 57 L55 72 L25 57 L25 27 Z" stroke="#7AB648" strokeWidth="5" fill="none"/>
+          {/* Inner cube - front face */}
+          <path d="M55 35 L72 44 L72 62 L55 71 L38 62 L38 44 Z" stroke="#7AB648" strokeWidth="4" fill="none"/>
+          {/* Inner cube - top line */}
+          <path d="M55 35 L55 52 M38 44 L55 52 L72 44" stroke="#7AB648" strokeWidth="3.5" fill="none"/>
+          {/* Inner cube - vertical */}
+          <path d="M55 52 L55 71" stroke="#7AB648" strokeWidth="3.5"/>
+        </svg>
       </div>
 
       {/* Nav items */}
