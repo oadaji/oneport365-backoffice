@@ -120,10 +120,11 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
   const maxResults = 500;
   const force = req.query.force === "true";
 
-  // Force resync: clear existing emails and RFQs so UIDs are re-processed
+  // Force resync: clear existing emails/RFQs and reset lastSyncedAt so UIDs are re-processed
   if (force) {
     await Email.deleteMany({});
     await Rfq.deleteMany({});
+    await EmailAccount.updateMany({}, { $unset: { lastSyncedAt: 1 } });
   }
 
   const accounts = await getAccountsToSync();
