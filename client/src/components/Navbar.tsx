@@ -1,12 +1,46 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Mail, MessageCircle, FileText, DollarSign, Users, Settings } from "lucide-react";
+import { Mail, FileText, DollarSign, Building2 } from "lucide-react";
 import api from "../lib/api";
+
+function WhatsAppIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
+      <path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1" />
+    </svg>
+  );
+}
+
+function NavTooltip({ label, visible }: { label: string; visible: boolean }) {
+  if (!visible) return null;
+  return (
+    <div style={{
+      position: "absolute",
+      left: "calc(100% + 10px)",
+      top: "50%",
+      transform: "translateY(-50%)",
+      backgroundColor: "#111",
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: 500,
+      padding: "5px 10px",
+      borderRadius: 6,
+      whiteSpace: "nowrap",
+      pointerEvents: "none",
+      zIndex: 1000,
+      boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+    }}>
+      {label}
+    </div>
+  );
+}
 
 export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [counts, setCounts] = useState({ rfqs: 0, quotes: 0, companies: 0 });
+  const [hoveredPath, setHoveredPath] = useState<string | null>(null);
 
   useEffect(() => {
     api.get("/rfqs").then((res) => {
@@ -27,10 +61,10 @@ export default function Navbar() {
     return location.pathname.startsWith(path);
   };
 
-  const navItems = [
-    { path: "/crm", title: "CRM", count: counts.companies, icon: Users },
+  const navItems: { path: string; title: string; count: number | null; icon: React.FC<{ size?: number }> }[] = [
+    { path: "/crm", title: "CRM", count: counts.companies, icon: Building2 },
     { path: "/", title: "RFQ Inbox", icon: Mail, count: counts.rfqs },
-    { path: "/whatsapp", title: "WhatsApp", icon: MessageCircle, count: 5 },
+    { path: "/whatsapp", title: "WhatsApp Inbox", icon: WhatsAppIcon, count: 5 },
     { path: "/rates", title: "Rates", icon: DollarSign, count: null },
     { path: "/quotes", title: "Quotes", icon: FileText, count: counts.quotes },
   ];
@@ -52,9 +86,8 @@ export default function Navbar() {
       <div
         style={{ marginBottom: 20, cursor: "pointer", padding: 4 }}
         onClick={() => navigate("/")}
-        title="OnePort 365"
       >
-        <img src="/oneport365-logo.png" alt="OnePort 365" style={{ height: 24, width: "auto" }} />
+        <img src="/logo-icon.png" alt="OnePort 365" style={{ height: 28, width: "auto", filter: "brightness(10)" }} />
       </div>
 
       {/* Nav items */}
@@ -66,7 +99,6 @@ export default function Navbar() {
             <div
               key={item.path}
               onClick={() => navigate(item.path)}
-              title={item.title}
               style={{
                 position: "relative",
                 display: "flex",
@@ -81,12 +113,14 @@ export default function Navbar() {
                 transition: "background-color 0.15s, color 0.15s",
               }}
               onMouseEnter={(e) => {
+                setHoveredPath(item.path);
                 if (!active) {
                   e.currentTarget.style.backgroundColor = "#243d1f";
                   e.currentTarget.style.color = "#c0d0c0";
                 }
               }}
               onMouseLeave={(e) => {
+                setHoveredPath(null);
                 if (!active) {
                   e.currentTarget.style.backgroundColor = "transparent";
                   e.currentTarget.style.color = "#8a9e8a";
@@ -112,6 +146,7 @@ export default function Navbar() {
                   {item.count}
                 </span>
               )}
+              <NavTooltip label={item.title} visible={hoveredPath === item.path} />
             </div>
           );
         })}
@@ -125,8 +160,8 @@ export default function Navbar() {
         />
         <div
           onClick={() => navigate("/settings")}
-          title="Settings"
           style={{
+            position: "relative",
             width: 32,
             height: 32,
             borderRadius: "50%",
@@ -140,10 +175,17 @@ export default function Navbar() {
             cursor: "pointer",
             transition: "background-color 0.15s",
           }}
-          onMouseEnter={(e) => { if (!isActive("/settings")) e.currentTarget.style.backgroundColor = "#3d6a2d"; }}
-          onMouseLeave={(e) => { if (!isActive("/settings")) e.currentTarget.style.backgroundColor = "#2d5225"; }}
+          onMouseEnter={(e) => {
+            setHoveredPath("/settings");
+            if (!isActive("/settings")) e.currentTarget.style.backgroundColor = "#3d6a2d";
+          }}
+          onMouseLeave={(e) => {
+            setHoveredPath(null);
+            if (!isActive("/settings")) e.currentTarget.style.backgroundColor = "#2d5225";
+          }}
         >
           S
+          <NavTooltip label="Settings" visible={hoveredPath === "/settings"} />
         </div>
       </div>
     </nav>
