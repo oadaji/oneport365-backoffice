@@ -33,6 +33,12 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     return;
   }
 
+  // Allow Microsoft OAuth flow without auth (callback has no app token)
+  if (req.path.startsWith("/api/auth/microsoft")) {
+    next();
+    return;
+  }
+
   // Check token
   const token = req.headers["x-app-token"] as string;
   const expectedToken = generateToken(appPassword);
