@@ -118,9 +118,13 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const connectOutlook = () => {
-    const baseUrl = process.env.REACT_APP_API_URL || "http://localhost:5001/api";
-    window.location.href = `${baseUrl}/auth/microsoft?t=${Date.now()}`;
+  const connectOutlook = async () => {
+    try {
+      const { data } = await api.get(`/auth/microsoft/url?t=${Date.now()}`);
+      if (data.url) window.location.href = data.url;
+    } catch (err: any) {
+      alert(err.response?.data?.error || "Failed to start Microsoft login");
+    }
   };
 
   const connectSharedMailbox = async () => {

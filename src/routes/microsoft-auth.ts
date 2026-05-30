@@ -8,7 +8,23 @@ import {
 
 const router = Router();
 
-// GET /api/auth/microsoft — redirect user to Azure AD login
+// GET /api/auth/microsoft/url — return auth URL as JSON (avoids browser redirect caching)
+router.get("/auth/microsoft/url", async (_req: Request, res: Response) => {
+  try {
+    if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET) {
+      res.status(500).json({ error: "Microsoft OAuth not configured — set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET in .env" });
+      return;
+    }
+    const shared = _req.query.shared === "true" ? "shared" : "";
+    const url = await getAuthUrl(shared);
+    res.set("Cache-Control", "no-store");
+    res.json({ url });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to generate auth URL", details: err.message });
+  }
+});
+
+// GET /api/auth/microsoft — redirect user to Azure AD login (legacy, also works)
 router.get("/auth/microsoft", async (_req: Request, res: Response) => {
   try {
     if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET) {
