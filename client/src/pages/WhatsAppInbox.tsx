@@ -165,7 +165,13 @@ export default function WhatsAppInbox() {
       {/* ===== LEFT: CONTACT SIDEBAR ===== */}
       <div style={{ width: 280, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", background: "var(--surface)", flexShrink: 0 }}>
         <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>WhatsApp Business</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            <button onClick={() => { window.location.href = "/"; }} style={{
+              padding: "2px 6px", fontSize: 10, fontWeight: 500, background: "none", border: "1px solid var(--border)",
+              borderRadius: 4, cursor: "pointer", color: "var(--text3)", fontFamily: "Inter, sans-serif",
+            }}>← RFQ</button>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>WhatsApp Business</span>
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text3)" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#dc2626" }} />
             +234 XXX XXX XXXX · not connected

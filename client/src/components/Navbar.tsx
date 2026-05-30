@@ -1,13 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Mail, FileText, DollarSign, Building2 } from "lucide-react";
+import { FileText, DollarSign, Building2, Ship } from "lucide-react";
 import api from "../lib/api";
 
-function WhatsAppIcon({ size = 18 }: { size?: number }) {
+function RfqIcon({ size = 18 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
-      <path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      {/* Email envelope */}
+      <rect x="2" y="4" width="12" height="10" rx="1.5" />
+      <path d="M2 6l6 4 6-4" />
+      {/* WhatsApp bubble */}
+      <circle cx="18" cy="15" r="5.5" strokeWidth="1.6" />
+      <path d="M15.8 20l.6-2.2" strokeWidth="1.4" />
+      <path d="M16.5 14a1.5 1.5 0 0 1 1.5 1.5c0 .5-.3.9-.7 1.1l-.3.4v.5" strokeWidth="1.3" />
     </svg>
   );
 }
@@ -63,10 +68,10 @@ export default function Navbar() {
 
   const navItems: { path: string; title: string; count: number | null; icon: React.FC<{ size?: number }> }[] = [
     { path: "/crm", title: "CRM", count: counts.companies, icon: Building2 },
-    { path: "/", title: "RFQ Inbox", icon: Mail, count: counts.rfqs },
-    { path: "/whatsapp", title: "WhatsApp Inbox", icon: WhatsAppIcon, count: 5 },
+    { path: "/", title: "RFQ", icon: RfqIcon, count: counts.rfqs },
     { path: "/rates", title: "Rates", icon: DollarSign, count: null },
     { path: "/quotes", title: "Quotes", icon: FileText, count: counts.quotes },
+    { path: "/shipments", title: "Shipments", icon: Ship, count: null },
   ];
 
   return (
