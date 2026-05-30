@@ -50,12 +50,12 @@ router.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
     const error = req.query.error as string;
     if (error) {
       const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-      res.redirect(`${frontendUrl}/settings?outlook=error&message=${encodeURIComponent(req.query.error_description as string || error)}`);
+      res.redirect(`${frontendUrl}/?outlook=error&message=${encodeURIComponent(req.query.error_description as string || error)}`);
       return;
     }
     if (!code) {
       const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-      res.redirect(`${frontendUrl}/settings?outlook=error&message=${encodeURIComponent("No authorization code received. Please try again.")}`);
+      res.redirect(`${frontendUrl}/?outlook=error&message=${encodeURIComponent("No authorization code received. Please try again.")}`);
       return;
     }
 
@@ -95,12 +95,12 @@ router.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
       });
     }
 
-    // Redirect to frontend settings page
+    // Redirect to frontend RFQ dashboard
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
     res.redirect(`${frontendUrl}/?outlook=connected&email=${encodeURIComponent(tokens.email)}`);
   } catch (err: any) {
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-    res.redirect(`${frontendUrl}/settings?outlook=error&message=${encodeURIComponent(err.message)}`);
+    res.redirect(`${frontendUrl}/?outlook=error&message=${encodeURIComponent(err.message)}`);
   }
 });
 
