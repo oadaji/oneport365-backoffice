@@ -743,7 +743,10 @@ export default function RfqInbox() {
           <div style={{ padding: "20px 28px" }}>
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-              <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", margin: 0 }}>RFQ</h1>
+              <div>
+                <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", margin: 0 }}>RFQ</h1>
+                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Track and manage all quote requests</div>
+              </div>
               <div style={{ display: "flex", gap: 6 }}>
                 {([
                   { key: "all" as const, label: "All", icon: null, count: rfqs.length, activeColor: "var(--text)" },
