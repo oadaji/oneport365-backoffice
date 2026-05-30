@@ -33,7 +33,7 @@ export async function getAuthUrl(state?: string): Promise<string> {
     scopes: SCOPES,
     redirectUri,
     state: state || "",
-    prompt: "consent",
+    prompt: "select_account",
     correlationId: crypto.randomUUID(),
   });
 }

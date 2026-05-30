@@ -47,9 +47,15 @@ router.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
   res.set("Pragma", "no-cache");
   try {
     const code = req.query.code as string;
+    const error = req.query.error as string;
+    if (error) {
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+      res.redirect(`${frontendUrl}/settings?outlook=error&message=${encodeURIComponent(req.query.error_description as string || error)}`);
+      return;
+    }
     if (!code) {
-      // No code — redirect to start the OAuth flow instead of showing error
-      res.redirect("/api/auth/microsoft");
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+      res.redirect(`${frontendUrl}/settings?outlook=error&message=${encodeURIComponent("No authorization code received. Please try again.")}`);
       return;
     }
 
