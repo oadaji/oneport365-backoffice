@@ -59,17 +59,22 @@ router.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
       return;
     }
 
+    console.log("[OUTLOOK] Exchanging code for tokens...");
     const tokens = await exchangeCode(code);
     const isShared = (req.query.state as string) === "shared";
+    console.log(`[OUTLOOK] Got tokens — email=${tokens.email}, hasRefresh=${!!tokens.refreshToken}, expiresAt=${tokens.expiresAt}`);
 
     if (!tokens.email) {
+      console.error("[OUTLOOK] No email in token claims");
       res.status(400).json({ error: "Could not determine email from Microsoft account" });
       return;
     }
 
     // Upsert email account
+    console.log(`[OUTLOOK] Saving account for ${tokens.email}...`);
     const existing = await EmailAccount.findOne({ email: tokens.email });
     if (existing) {
+      console.log(`[OUTLOOK] Updating existing account ${existing._id}`);
       existing.accessToken = tokens.accessToken;
       existing.refreshToken = tokens.refreshToken;
       existing.tokenExpiresAt = tokens.expiresAt;
@@ -80,6 +85,7 @@ router.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
       existing.lastError = undefined;
       await existing.save();
     } else {
+      console.log(`[OUTLOOK] Creating new account for ${tokens.email}`);
       await EmailAccount.create({
         email: tokens.email,
         label: tokens.name || tokens.email,
@@ -94,6 +100,7 @@ router.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
         active: true,
       });
     }
+    console.log(`[OUTLOOK] Account saved successfully for ${tokens.email}`);
 
     // Redirect to frontend RFQ dashboard
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
