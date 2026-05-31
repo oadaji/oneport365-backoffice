@@ -134,9 +134,12 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
       await api.post("/email-accounts/shared", { email: sharedEmail, label: sharedEmail });
       setSharedEmail("");
       setConnectMode("");
+      alert(`Shared mailbox ${sharedEmail} connected successfully!`);
       await fetchAccounts();
     } catch (err: any) {
-      setTestResult({ ok: false, message: err.response?.data?.error || "Failed to connect shared mailbox" });
+      const msg = err.response?.data?.error || err.message || "Failed to connect shared mailbox";
+      alert(`Error: ${msg}`);
+      setTestResult({ ok: false, message: msg });
     } finally {
       setSaving(false);
     }
