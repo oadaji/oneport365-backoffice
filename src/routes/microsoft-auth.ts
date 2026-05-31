@@ -106,8 +106,10 @@ router.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
     res.redirect(`${frontendUrl}/?outlook=connected&email=${encodeURIComponent(tokens.email)}`);
   } catch (err: any) {
+    console.error(`[OUTLOOK] ERROR in callback: ${err.message}`);
+    console.error(`[OUTLOOK] Stack: ${err.stack}`);
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-    res.redirect(`${frontendUrl}/?outlook=error&message=${encodeURIComponent(err.message)}`);
+    res.redirect(`${frontendUrl}/?outlook=error&message=${encodeURIComponent(`[${err.name || "Error"}] ${err.message}`)}`);
   }
 });
 
