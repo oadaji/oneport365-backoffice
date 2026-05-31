@@ -591,6 +591,20 @@ export default function RfqInbox() {
 
   // Quote modal state
   const [showQuoteModal, setShowQuoteModal] = useState(false);
+  const [showPartnerModal, setShowPartnerModal] = useState(false);
+  const [partnerTab, setPartnerTab] = useState<"manage" | "contact">("manage");
+  const [partners, setPartners] = useState([
+    { id: "p1", name: "Global Freight Solutions", email: "rates@globalfreight.com", phone: "+234 801 234 5678", categories: ["FCL", "LCL"] },
+    { id: "p2", name: "SeaLink Logistics", email: "quotes@sealink.ng", phone: "+234 802 345 6789", categories: ["FCL", "DG"] },
+    { id: "p3", name: "AirCargo Express", email: "pricing@aircargo.com", phone: "+1 212 555 0100", categories: ["AIR", "LCL"] },
+    { id: "p4", name: "TransOcean Shipping", email: "ops@transocean.co", phone: "+44 20 7946 0958", categories: ["FCL", "LCL", "AIR"] },
+    { id: "p5", name: "Prime Maritime", email: "commercial@primemaritime.com", phone: "+234 803 456 7890", categories: ["FCL"] },
+    { id: "p6", name: "Eagle Freight Int'l", email: "rates@eaglefreight.com", phone: "+971 4 123 4567", categories: ["FCL", "AIR", "DG"] },
+    { id: "p7", name: "Coastal Shipping Ltd", email: "info@coastalship.ng", phone: "+234 804 567 8901", categories: ["FCL", "LCL"] },
+    { id: "p8", name: "Apex Logistics", email: "quotes@apexlog.com", phone: "+65 6789 0123", categories: ["AIR", "LCL", "DG"] },
+  ]);
+  const [newPartner, setNewPartner] = useState({ name: "", email: "", phone: "", categories: "" });
+  const [editingPartnerId, setEditingPartnerId] = useState<string | null>(null);
   const [quoteStep, setQuoteStep] = useState<"rate-check" | "step1" | "step2" | "step3">("rate-check");
   const [rateCheckStatus, setRateCheckStatus] = useState<"checking" | "found" | "no-rates">("checking");
   const [partnerRoutes, setPartnerRoutes] = useState<{ pol: string; pod: string }[]>([]);
@@ -612,17 +626,6 @@ export default function RfqInbox() {
     { carrier: "MSC", _20ft: 1250, _40ft: 2100, _40hc: 2250, transitDays: 28, validUntil: "2026-06-15" },
     { carrier: "Maersk", _20ft: 1350, _40ft: 2200, _40hc: 2400, transitDays: 25, validUntil: "2026-06-10" },
     { carrier: "CMA CGM", _20ft: 1180, _40ft: 1980, _40hc: 2150, transitDays: 30, validUntil: "2026-06-12" },
-  ];
-
-  const MOCK_PARTNERS = [
-    { id: "p1", name: "Global Freight Solutions", email: "rates@globalfreight.com", categories: ["FCL", "LCL"] },
-    { id: "p2", name: "SeaLink Logistics", email: "quotes@sealink.ng", categories: ["FCL", "DG"] },
-    { id: "p3", name: "AirCargo Express", email: "pricing@aircargo.com", categories: ["AIR", "LCL"] },
-    { id: "p4", name: "TransOcean Shipping", email: "ops@transocean.co", categories: ["FCL", "LCL", "AIR"] },
-    { id: "p5", name: "Prime Maritime", email: "commercial@primemaritime.com", categories: ["FCL"] },
-    { id: "p6", name: "Eagle Freight Int'l", email: "rates@eaglefreight.com", categories: ["FCL", "AIR", "DG"] },
-    { id: "p7", name: "Coastal Shipping Ltd", email: "info@coastalship.ng", categories: ["FCL", "LCL"] },
-    { id: "p8", name: "Apex Logistics", email: "quotes@apexlog.com", categories: ["AIR", "LCL", "DG"] },
   ];
 
   // Per-RFQ outreach: only some RFQs have outreach data, others are empty
@@ -1103,7 +1106,7 @@ OnePort 365 Commercial Team`
             <button className="btn btn-sm" style={{ padding: "3px 6px", display: "flex", alignItems: "center" }} title="Inboxes" onClick={() => setShowEmailMonitor(true)}>
               <Mail size={12} />
             </button>
-            <button className="btn btn-sm" style={{ padding: "3px 6px", display: "flex", alignItems: "center" }} title="Contact Partners" onClick={() => { if (selected) { initPartnerWizard(); setShowQuoteModal(true); setQuoteStep("step1"); } }}>
+            <button className="btn btn-sm" style={{ padding: "3px 6px", display: "flex", alignItems: "center" }} title="Partners" onClick={() => { setShowPartnerModal(true); setPartnerTab("manage"); }}>
               <Users size={12} />
             </button>
             <button
@@ -2045,7 +2048,7 @@ OnePort 365 Commercial Team`
 
                 {/* Partner cards */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
-                  {MOCK_PARTNERS.map(p => {
+                  {partners.map(p => {
                     const isSelected = selectedPartners.includes(p.id);
                     return (
                       <div
@@ -2127,7 +2130,7 @@ OnePort 365 Commercial Team`
                       Emails sent to {selectedPartners.length} partner{selectedPartners.length > 1 ? "s" : ""}.
                     </div>
                     <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 24 }}>
-                      {MOCK_PARTNERS.filter(p => selectedPartners.includes(p.id)).map(p => p.email).join(", ")}
+                      {partners.filter(p => selectedPartners.includes(p.id)).map(p => p.email).join(", ")}
                     </div>
                     <button
                       className="btn btn-primary"
@@ -2143,7 +2146,7 @@ OnePort 365 Commercial Team`
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Recipients ({selectedPartners.length})</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {MOCK_PARTNERS.filter(p => selectedPartners.includes(p.id)).map(p => (
+                        {partners.filter(p => selectedPartners.includes(p.id)).map(p => (
                           <span key={p.id} style={{
                             padding: "4px 10px", fontSize: 11, background: "var(--bg)",
                             border: "1px solid var(--border)", borderRadius: 12, color: "var(--text2)",
@@ -2197,6 +2200,297 @@ OnePort 365 Commercial Team`
                       </button>
                     </div>
                   </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== PARTNER MANAGEMENT MODAL ===== */}
+      {showPartnerModal && (
+        <div
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 1100,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowPartnerModal(false); }}
+        >
+          <div style={{
+            background: "var(--surface)", borderRadius: 14, width: 640, maxHeight: "85vh",
+            overflow: "auto", padding: "24px 28px", position: "relative",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+          }}>
+            {/* Close */}
+            <button
+              onClick={() => setShowPartnerModal(false)}
+              style={{
+                position: "absolute", top: 16, right: 16, background: "none", border: "none",
+                cursor: "pointer", color: "var(--text3)", fontSize: 18,
+              }}
+            >
+              <X size={16} />
+            </button>
+
+            {/* Header */}
+            <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Partners</div>
+            <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 16 }}>Manage your shipping partners and request rates</div>
+
+            {/* Tabs */}
+            <div style={{ display: "flex", gap: 0, marginBottom: 20, borderBottom: "2px solid var(--border)" }}>
+              {(["manage", "contact"] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setPartnerTab(tab)}
+                  style={{
+                    padding: "8px 20px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    background: "none", border: "none", borderBottom: partnerTab === tab ? "2px solid var(--accent)" : "2px solid transparent",
+                    color: partnerTab === tab ? "var(--accent-dark)" : "var(--text3)",
+                    marginBottom: -2, transition: "all 0.15s",
+                  }}
+                >
+                  {tab === "manage" ? "Manage Partners" : "Contact for RFQ"}
+                </button>
+              ))}
+            </div>
+
+            {/* ---- MANAGE TAB ---- */}
+            {partnerTab === "manage" && (
+              <div>
+                {/* Add new partner form */}
+                <div style={{
+                  border: "1px dashed var(--border)", borderRadius: 8, padding: 14, marginBottom: 16,
+                  background: "var(--bg)",
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Add New Partner</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                    <input
+                      type="text" placeholder="Partner name"
+                      value={newPartner.name} onChange={e => setNewPartner({ ...newPartner, name: e.target.value })}
+                      style={{ padding: "8px 12px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                    />
+                    <input
+                      type="email" placeholder="Email address"
+                      value={newPartner.email} onChange={e => setNewPartner({ ...newPartner, email: e.target.value })}
+                      style={{ padding: "8px 12px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                    />
+                    <input
+                      type="text" placeholder="Phone number"
+                      value={newPartner.phone} onChange={e => setNewPartner({ ...newPartner, phone: e.target.value })}
+                      style={{ padding: "8px 12px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                    />
+                    <input
+                      type="text" placeholder="Categories (e.g. FCL, LCL, AIR)"
+                      value={newPartner.categories} onChange={e => setNewPartner({ ...newPartner, categories: e.target.value })}
+                      style={{ padding: "8px 12px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!newPartner.name.trim() || !newPartner.email.trim()) return;
+                      const cats = newPartner.categories.split(",").map(c => c.trim()).filter(Boolean);
+                      setPartners(prev => [...prev, {
+                        id: `p${Date.now()}`,
+                        name: newPartner.name.trim(),
+                        email: newPartner.email.trim(),
+                        phone: newPartner.phone.trim(),
+                        categories: cats.length > 0 ? cats : ["FCL"],
+                      }]);
+                      setNewPartner({ name: "", email: "", phone: "", categories: "" });
+                    }}
+                    disabled={!newPartner.name.trim() || !newPartner.email.trim()}
+                    style={{
+                      padding: "6px 16px", fontSize: 11, fontWeight: 600, borderRadius: 6,
+                      background: (!newPartner.name.trim() || !newPartner.email.trim()) ? "var(--border)" : "var(--accent)",
+                      color: (!newPartner.name.trim() || !newPartner.email.trim()) ? "var(--text3)" : "#fff",
+                      border: "none", cursor: (!newPartner.name.trim() || !newPartner.email.trim()) ? "default" : "pointer",
+                    }}
+                  >
+                    + Add Partner
+                  </button>
+                </div>
+
+                {/* Partners list */}
+                <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                  All Partners ({partners.length})
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {partners.map(p => {
+                    const isEditing = editingPartnerId === p.id;
+                    return (
+                      <div key={p.id} style={{
+                        border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px",
+                        background: isEditing ? "var(--bg)" : "transparent", transition: "background 0.15s",
+                      }}>
+                        {isEditing ? (
+                          <div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                              <input
+                                type="text" defaultValue={p.name}
+                                onBlur={e => setPartners(prev => prev.map(x => x.id === p.id ? { ...x, name: e.target.value } : x))}
+                                style={{ padding: "6px 10px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                              />
+                              <input
+                                type="email" defaultValue={p.email}
+                                onBlur={e => setPartners(prev => prev.map(x => x.id === p.id ? { ...x, email: e.target.value } : x))}
+                                style={{ padding: "6px 10px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                              />
+                              <input
+                                type="text" defaultValue={p.phone}
+                                onBlur={e => setPartners(prev => prev.map(x => x.id === p.id ? { ...x, phone: e.target.value } : x))}
+                                style={{ padding: "6px 10px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                              />
+                              <input
+                                type="text" defaultValue={p.categories.join(", ")}
+                                onBlur={e => setPartners(prev => prev.map(x => x.id === p.id ? { ...x, categories: e.target.value.split(",").map(c => c.trim()).filter(Boolean) } : x))}
+                                style={{ padding: "6px 10px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                              />
+                            </div>
+                            <button
+                              onClick={() => setEditingPartnerId(null)}
+                              style={{ fontSize: 10, fontWeight: 600, padding: "4px 12px", borderRadius: 4, background: "var(--accent)", color: "#fff", border: "none", cursor: "pointer" }}
+                            >Done</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                <div style={{
+                                  width: 28, height: 28, borderRadius: "50%", background: "var(--accent-light)",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  fontSize: 11, fontWeight: 700, color: "var(--accent-dark)", flexShrink: 0,
+                                }}>
+                                  {p.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{p.name}</div>
+                                  <div style={{ fontSize: 10, color: "var(--text3)" }}>{p.email}{p.phone ? ` | ${p.phone}` : ""}</div>
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", gap: 4, marginLeft: 36 }}>
+                                {p.categories.map(c => (
+                                  <span key={c} style={{
+                                    fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3,
+                                    background: c === "DG" ? "#fef2f2" : c === "AIR" ? "#fffbeb" : "#f0fdf4",
+                                    color: c === "DG" ? "#dc2626" : c === "AIR" ? "#d97706" : "#16a34a",
+                                  }}>{c}</span>
+                                ))}
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                              <button
+                                onClick={() => setEditingPartnerId(p.id)}
+                                style={{ fontSize: 10, fontWeight: 500, padding: "4px 10px", borderRadius: 4, background: "none", color: "var(--text3)", border: "1px solid var(--border)", cursor: "pointer" }}
+                              >Edit</button>
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Remove ${p.name}?`)) {
+                                    setPartners(prev => prev.filter(x => x.id !== p.id));
+                                  }
+                                }}
+                                style={{ fontSize: 10, fontWeight: 500, padding: "4px 10px", borderRadius: 4, background: "none", color: "#dc2626", border: "1px solid #fecaca", cursor: "pointer" }}
+                              >Remove</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ---- CONTACT TAB ---- */}
+            {partnerTab === "contact" && (
+              <div>
+                {selected ? (
+                  <div>
+                    <div style={{
+                      padding: "10px 14px", borderRadius: 8, background: "var(--bg)",
+                      border: "1px solid var(--border)", marginBottom: 16,
+                    }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Linked RFQ</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{selected.ref}</div>
+                      <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                        {fieldVal(selected.fields || [], "pol") || "—"} → {fieldVal(selected.fields || [], "pod") || "—"} | {fieldVal(selected.fields || [], "commodity") || "—"}
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 12 }}>
+                      Select partners to request rates for this shipment, then proceed to compose your email.
+                    </div>
+
+                    {/* Partner selection grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
+                      {partners.map(p => {
+                        const isSel = selectedPartners.includes(p.id);
+                        return (
+                          <div
+                            key={p.id}
+                            onClick={() => togglePartner(p.id)}
+                            style={{
+                              padding: "10px 12px", borderRadius: 8, cursor: "pointer",
+                              border: isSel ? "2px solid var(--accent)" : "1px solid var(--border)",
+                              background: isSel ? "#e6f7ec" : "var(--surface)",
+                              transition: "all 0.15s",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                              <div style={{
+                                width: 14, height: 14, borderRadius: 3, border: isSel ? "none" : "2px solid var(--border)",
+                                background: isSel ? "var(--accent)" : "transparent",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                color: "#fff", fontSize: 9, fontWeight: 700, flexShrink: 0,
+                              }}>
+                                {isSel && "✓"}
+                              </div>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text)" }}>{p.name}</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: "var(--text3)", marginLeft: 20 }}>{p.email}</div>
+                            <div style={{ display: "flex", gap: 3, marginLeft: 20, marginTop: 4 }}>
+                              {p.categories.map(c => (
+                                <span key={c} style={{
+                                  fontSize: 8, fontWeight: 600, padding: "1px 5px", borderRadius: 3,
+                                  background: c === "DG" ? "#fef2f2" : c === "AIR" ? "#fffbeb" : "#f0fdf4",
+                                  color: c === "DG" ? "#dc2626" : c === "AIR" ? "#d97706" : "#16a34a",
+                                }}>{c}</span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <button
+                        onClick={() => {
+                          if (selectedPartners.length === 0) { alert("Select at least one partner."); return; }
+                          setShowPartnerModal(false);
+                          initPartnerWizard();
+                          setShowQuoteModal(true);
+                          setQuoteStep("step1");
+                        }}
+                        style={{
+                          padding: "10px 24px", fontSize: 12, fontWeight: 600, borderRadius: 6,
+                          background: selectedPartners.length > 0 ? "var(--accent)" : "var(--border)",
+                          color: selectedPartners.length > 0 ? "#fff" : "var(--text3)",
+                          border: "none", cursor: selectedPartners.length > 0 ? "pointer" : "default",
+                          display: "flex", alignItems: "center", gap: 6,
+                        }}
+                      >
+                        Compose Rate Request ({selectedPartners.length}) →
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: "center", padding: "40px 20px" }}>
+                    <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.5 }}>📋</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text2)", marginBottom: 6 }}>No RFQ Selected</div>
+                    <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.5 }}>
+                      Select an RFQ from the inbox first, then come back here to contact partners for rate requests.
+                    </div>
+                  </div>
                 )}
               </div>
             )}
