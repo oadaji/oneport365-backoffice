@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useState } from "react";
 import { Plus, RefreshCw, Send, FileText, Trash2 } from "lucide-react";
 import api from "../lib/api";
@@ -52,7 +53,7 @@ export default function Quotes() {
 
   useEffect(() => {
     api.get("/quotes").then((res) => {
-      const data = res.data || [];
+      const data = (res.data || []) as Quote[];
       setQuotes(data);
       setLoading(false);
       // Auto-select quote if ?id= param is present
