@@ -21,7 +21,7 @@ function getClient(): msal.ConfidentialClientApplication {
     auth: {
       clientId,
       clientSecret,
-      authority: "https://login.microsoftonline.com/common",
+      authority: "https://login.microsoftonline.com/4142fdca-ff6c-4f47-b52e-054abe525951",
     },
   });
 }
