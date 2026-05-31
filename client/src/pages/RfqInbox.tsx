@@ -578,6 +578,60 @@ export default function RfqInbox() {
   const [view, setView] = useState<"dashboard" | "inbox">("dashboard");
   const [dashFilter, setDashFilter] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<"all" | "email" | "whatsapp" | "web">("all");
+  const [leftWidth, setLeftWidth] = useState(280);
+  const [rightWidth, setRightWidth] = useState(300);
+  const [dragging, setDragging] = useState<"left" | "right" | null>(null);
+  const [composeHeight, setComposeHeight] = useState(320);
+  const [composeDragging, setComposeDragging] = useState(false);
+  const composeColRef = React.useRef<HTMLDivElement>(null);
+
+  const handleMouseDown = (side: "left" | "right") => (e: React.MouseEvent) => {
+    e.preventDefault();
+    setDragging(side);
+    const startX = e.clientX;
+    const startLeft = leftWidth;
+    const startRight = rightWidth;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (side === "left") {
+        const newW = Math.max(200, Math.min(450, startLeft + (ev.clientX - startX)));
+        setLeftWidth(newW);
+      } else {
+        const newW = Math.max(220, Math.min(500, startRight - (ev.clientX - startX)));
+        setRightWidth(newW);
+      }
+    };
+    const onMouseUp = () => {
+      setDragging(null);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  };
+
+  const handleComposeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setComposeDragging(true);
+    const startY = e.clientY;
+    const startH = composeHeight;
+    const colH = composeColRef.current?.clientHeight || 600;
+    document.body.style.userSelect = "none";
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const delta = startY - ev.clientY;
+      const newH = Math.max(160, Math.min(Math.round(colH * 0.78), startH + delta));
+      setComposeHeight(newH);
+    };
+    const onMouseUp = () => {
+      setComposeDragging(false);
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  };
 
   useEffect(() => {
     loadRfqs(true);
@@ -735,7 +789,7 @@ export default function RfqInbox() {
     : rfqs;
 
   return (
-    <div style={{ display: "flex", flex: 1, overflow: "hidden", flexDirection: "column" }}>
+    <div style={{ display: "flex", flex: 1, overflow: "hidden", flexDirection: "column", userSelect: dragging ? "none" : "auto" }}>
 
       {/* ===== DASHBOARD VIEW ===== */}
       {view === "dashboard" && (
@@ -939,7 +993,7 @@ export default function RfqInbox() {
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
       {/* ===== LEFT: INBOX SIDEBAR ===== */}
-      <div style={{ width: 280, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", background: "var(--surface)", flexShrink: 0 }}>
+      <div style={{ width: leftWidth, borderRight: "none", display: "flex", flexDirection: "column", background: "var(--surface)", flexShrink: 0 }}>
         <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <button onClick={() => { setView("dashboard"); setDashFilter(null); }} style={{
@@ -1030,8 +1084,17 @@ export default function RfqInbox() {
         </div>
       </div>
 
+      {/* Left divider */}
+      <div onMouseDown={handleMouseDown("left")} style={{
+        width: 4, cursor: "col-resize", background: dragging === "left" ? "var(--accent)" : "var(--border)",
+        flexShrink: 0, transition: dragging ? "none" : "background 0.15s",
+      }}
+        onMouseEnter={e => { if (!dragging) e.currentTarget.style.background = "var(--accent)"; }}
+        onMouseLeave={e => { if (!dragging) e.currentTarget.style.background = "var(--border)"; }}
+      />
+
       {/* ===== CENTER: EMAIL BODY ===== */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--surface)" }}>
+      <div ref={composeColRef} style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--surface)" }}>
         {selected ? (
           <>
             {/* Email header */}
@@ -1179,7 +1242,25 @@ export default function RfqInbox() {
             {showReply && (() => {
               const isResend = selected.status === "replied";
               return (
-              <div style={{ borderTop: "2px solid var(--accent)", padding: "12px 20px", background: "#f8faf8", maxHeight: "40vh", overflowY: "auto", flexShrink: 0 }}>
+              <div style={{ height: composeHeight, flexShrink: 0, display: "flex", flexDirection: "column", background: "#f8faf8" }}>
+                {/* Resize handle */}
+                <div
+                  onMouseDown={handleComposeMouseDown}
+                  style={{
+                    height: 12, cursor: "ns-resize", display: "flex", alignItems: "center", justifyContent: "center",
+                    background: composeDragging ? "var(--accent-light)" : "#eef2ee", borderTop: "2px solid var(--accent)",
+                    flexShrink: 0, transition: composeDragging ? "none" : "background 0.15s",
+                  }}
+                  onMouseEnter={e => { if (!composeDragging) e.currentTarget.style.background = "var(--accent-light)"; }}
+                  onMouseLeave={e => { if (!composeDragging) e.currentTarget.style.background = "#eef2ee"; }}
+                >
+                  <div style={{ display: "flex", gap: 3 }}>
+                    {[0,1,2,3,4].map(i => (
+                      <div key={i} style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--text3)" }} />
+                    ))}
+                  </div>
+                </div>
+              <div style={{ padding: "12px 20px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
                     {isResend ? "↩ Send Again" : "← Reply"}
@@ -1223,7 +1304,7 @@ export default function RfqInbox() {
                 <textarea
                   value={replyDraft}
                   onChange={(e) => setReplyDraft(e.target.value)}
-                  style={{ width: "100%", minHeight: 100, padding: 10, fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, fontFamily: "Inter, sans-serif", resize: "vertical", outline: "none", color: "var(--text)" }}
+                  style={{ width: "100%", flex: 1, minHeight: 60, padding: 10, fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, fontFamily: "Inter, sans-serif", resize: "none", outline: "none", color: "var(--text)" }}
                 />
                 <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
                   <button
@@ -1257,6 +1338,7 @@ export default function RfqInbox() {
                   )}
                 </div>
               </div>
+              </div>
               );
             })()}
 
@@ -1277,8 +1359,17 @@ export default function RfqInbox() {
         )}
       </div>
 
+      {/* Right divider */}
+      <div onMouseDown={handleMouseDown("right")} style={{
+        width: 4, cursor: "col-resize", background: dragging === "right" ? "var(--accent)" : "var(--border)",
+        flexShrink: 0, transition: dragging ? "none" : "background 0.15s",
+      }}
+        onMouseEnter={e => { if (!dragging) e.currentTarget.style.background = "var(--accent)"; }}
+        onMouseLeave={e => { if (!dragging) e.currentTarget.style.background = "var(--border)"; }}
+      />
+
       {/* ===== RIGHT: EXTRACTION PANEL ===== */}
-      <div style={{ width: 300, borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", background: "var(--surface)", flexShrink: 0, overflow: "hidden", height: "100%" }}>
+      <div style={{ width: rightWidth, borderLeft: "none", display: "flex", flexDirection: "column", background: "var(--surface)", flexShrink: 0, overflow: "hidden", height: "100%" }}>
         {selected ? (
           <>
             {/* Header */}
@@ -1349,6 +1440,7 @@ export default function RfqInbox() {
                   </div>
                 );
               })}
+
 
               {/* Additional details */}
               <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "14px 0 6px" }}>Additional Details</div>

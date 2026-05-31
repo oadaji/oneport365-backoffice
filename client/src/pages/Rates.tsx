@@ -75,6 +75,83 @@ function RateTypePill({ type }: { type?: string }) {
   );
 }
 
+const carriers = ["MSC", "Maersk", "CMA CGM", "Hapag-Lloyd", "PIL", "Evergreen", "COSCO", "ONE", "ZIM"];
+const lanes: [string, string, string, string, string, string][] = [
+  ["NGAPP", "NLRTM", "Nigeria", "Netherlands", "21 days", "14 days"],
+  ["NGAPP", "BEANR", "Nigeria", "Belgium", "18 days", "14 days"],
+  ["NGAPP", "GHTEM", "Nigeria", "Ghana", "5 days", "7 days"],
+  ["NGAPP", "DEHAM", "Nigeria", "Germany", "20 days", "14 days"],
+  ["NGAPP", "KEMBA", "Nigeria", "Kenya", "18 days", "10 days"],
+  ["NGAPP", "SGSIN", "Nigeria", "Singapore", "28 days", "14 days"],
+  ["NGAPP", "CNSHA", "Nigeria", "China", "32 days", "14 days"],
+  ["NLRTM", "NGAPP", "Netherlands", "Nigeria", "19 days", "14 days"],
+  ["CNSHA", "NGAPP", "China", "Nigeria", "35 days", "14 days"],
+  ["CNTAO", "NGAPP", "China", "Nigeria", "33 days", "14 days"],
+  ["AEJEA", "NGTCN", "UAE", "Nigeria", "16 days", "10 days"],
+  ["AEJEA", "NGAPP", "UAE", "Nigeria", "17 days", "10 days"],
+  ["DEHAM", "NGAPP", "Germany", "Nigeria", "20 days", "14 days"],
+  ["TRIST", "NGAPP", "Turkey", "Nigeria", "14 days", "14 days"],
+  ["NGONE", "NLRTM", "Nigeria", "Netherlands", "22 days", "14 days"],
+  ["NGTCN", "KEMBA", "Nigeria", "Kenya", "19 days", "10 days"],
+  ["CNNGB", "NGAPP", "China", "Nigeria", "34 days", "14 days"],
+];
+const rateTypes = ["all_in", "spot", "contract", "spot", "all_in", "contract", "spot", "all_in"];
+const equips = ["20GP", "40HC", "40HC", "20GP", "40RF", "40HC", "20FT", "40HC"];
+const commodities = ["General", "Agri", "FMCG", "General", "Reefer", "DG", "General", "Agri", "FMCG"];
+const inclusions = ["THC+BAF", "THC+BAF+ISPS", "THC only", "THC+BAF+PTI", "", "THC+BAF", "THC+BAF+ISPS"];
+
+const DUMMY_OCEAN: OceanRate[] = Array.from({ length: 50 }, (_, i) => {
+  const lane = lanes[i % lanes.length];
+  const rt = rateTypes[i % rateTypes.length];
+  const base20 = 800 + Math.floor(Math.random() * 2500);
+  const expDays = rt === "contract" ? 90 + Math.floor(Math.random() * 90) : 10 + Math.floor(Math.random() * 50);
+  const expDate = new Date(Date.now() + expDays * 86400000).toISOString().slice(0, 10);
+  return {
+    _id: `r${i + 1}`,
+    carrier: carriers[i % carriers.length],
+    polCode: lane[0], podCode: lane[1],
+    originCountry: lane[2], destCountry: lane[3],
+    commodityType: commodities[i % commodities.length],
+    equipmentType: equips[i % equips.length],
+    rateType: rt,
+    inclusionType: inclusions[i % inclusions.length] || undefined,
+    transitTime: lane[4], freeTime: lane[5],
+    currency: "USD",
+    amount20ft: base20,
+    amount40ft: Math.round(base20 * 1.45),
+    amount40hc: Math.round(base20 * 1.55),
+    expiryDate: expDate,
+  };
+});
+
+const DUMMY_HAUL_IMPORT: HaulageRate[] = [
+  { _id: "hi1", terminalName: "Apapa (APMT)", portCode: "NGAPP", destCity: "Ikeja", destState: "Lagos", shipmentType: "import", equipmentType: "40HC", currency: "NGN", price: 450000 },
+  { _id: "hi2", terminalName: "Apapa (APMT)", portCode: "NGAPP", destCity: "Kano", destState: "Kano", shipmentType: "import", equipmentType: "40HC", currency: "NGN", price: 2400000 },
+  { _id: "hi3", terminalName: "Tin Can (TICT)", portCode: "NGTCN", destCity: "Ikorodu", destState: "Lagos", shipmentType: "import", equipmentType: "20GP", currency: "NGN", price: 280000 },
+  { _id: "hi4", terminalName: "Lekki Deep Sea", portCode: "NGLKI", destCity: "Lekki FTZ", destState: "Lagos", shipmentType: "import", equipmentType: "40HC", currency: "NGN", price: 350000 },
+  { _id: "hi5", terminalName: "Apapa (APMT)", portCode: "NGAPP", destCity: "Ibadan", destState: "Oyo", shipmentType: "import", equipmentType: "20GP", currency: "NGN", price: 650000 },
+];
+
+const DUMMY_HAUL_EXPORT: HaulageRate[] = [
+  { _id: "he1", terminalName: "KAC Depot (Ibafo)", portCode: "IBAFO", originCity: "Ibafo", originState: "Ogun", destCity: "Apapa", destState: "Lagos", shipmentType: "export", equipmentType: "40HC", currency: "NGN", price: 380000 },
+  { _id: "he2", terminalName: "Kachicares Terminal", portCode: "KACHI", originCity: "Oshodi", originState: "Lagos", destCity: "Apapa", destState: "Lagos", shipmentType: "export", equipmentType: "40HC", currency: "NGN", price: 180000 },
+  { _id: "he3", terminalName: "Customer Warehouse", portCode: "CUST", originCity: "Kano", originState: "Kano", destCity: "Apapa", destState: "Lagos", shipmentType: "export", equipmentType: "20GP", currency: "NGN", price: 2200000 },
+  { _id: "he4", terminalName: "Lekki FTZ", portCode: "NGLKI", originCity: "Lekki", originState: "Lagos", destCity: "Lekki Deep Sea", destState: "Lagos", shipmentType: "export", equipmentType: "40HC", currency: "NGN", price: 250000 },
+];
+
+const DUMMY_OTHER: OtherChargeItem[] = [
+  { _id: "oc1", itemName: "NESS Inspection Fee", itemCategory: "Compliance", shipmentType: "export", country: "Nigeria", currency: "NGN", price: 510000 },
+  { _id: "oc2", itemName: "NXP Processing", itemCategory: "Compliance", shipmentType: "export", country: "Nigeria", currency: "NGN", price: 25000 },
+  { _id: "oc3", itemName: "Terminal Handling Charge (THC)", itemCategory: "Terminal", shipmentType: "import", country: "Nigeria", currency: "NGN", price: 185000 },
+  { _id: "oc4", itemName: "Container Deposit (40HC)", itemCategory: "Terminal", shipmentType: "import", currency: "USD", price: 1500 },
+  { _id: "oc5", itemName: "Customs Examination Fee", itemCategory: "Customs", shipmentType: "import", country: "Nigeria", currency: "NGN", price: 350000 },
+  { _id: "oc6", itemName: "Phytosanitary Certificate", itemCategory: "Compliance", shipmentType: "export", country: "Nigeria", currency: "NGN", price: 75000 },
+  { _id: "oc7", itemName: "Fumigation Certificate", itemCategory: "Compliance", shipmentType: "export", country: "Nigeria", currency: "NGN", price: 120000 },
+  { _id: "oc8", itemName: "Certificate of Origin (COO)", itemCategory: "Documentation", shipmentType: "export", country: "Nigeria", currency: "NGN", price: 50000 },
+  { _id: "oc9", itemName: "Bill of Lading Fee", itemCategory: "Documentation", shipmentType: "export", currency: "USD", price: 75 },
+  { _id: "oc10", itemName: "Agency Fee", itemCategory: "Service", commodityType: "General", currency: "NGN", price: 150000 },
+];
+
 export default function Rates() {
   const [tab, setTab] = useState<Tab>("ocean");
   const [ocean, setOcean] = useState<OceanRate[]>([]);
@@ -101,10 +178,10 @@ export default function Rates() {
   const loadAll = useCallback(() => {
     setLoading(true);
     Promise.all([
-      api.get("/rates/ocean").then(r => setOcean(r.data || [])),
-      api.get("/rates/haulage-import").then(r => setHaulImport(r.data || [])),
-      api.get("/rates/haulage-export").then(r => setHaulExport(r.data || [])),
-      api.get("/rates/other-charges").then(r => setOther(r.data || [])),
+      api.get("/rates/ocean").then(r => { const d = r.data || []; setOcean(d.length > 0 ? d : DUMMY_OCEAN); }).catch(() => setOcean(DUMMY_OCEAN)),
+      api.get("/rates/haulage-import").then(r => { const d = r.data || []; setHaulImport(d.length > 0 ? d : DUMMY_HAUL_IMPORT); }).catch(() => setHaulImport(DUMMY_HAUL_IMPORT)),
+      api.get("/rates/haulage-export").then(r => { const d = r.data || []; setHaulExport(d.length > 0 ? d : DUMMY_HAUL_EXPORT); }).catch(() => setHaulExport(DUMMY_HAUL_EXPORT)),
+      api.get("/rates/other-charges").then(r => { const d = r.data || []; setOther(d.length > 0 ? d : DUMMY_OTHER); }).catch(() => setOther(DUMMY_OTHER)),
       api.get("/rates/benchmarks").then(r => setBenchmarks(r.data || [])).catch(() => {}),
     ]).finally(() => setLoading(false));
   }, []);
@@ -151,7 +228,7 @@ export default function Rates() {
       result = ocean.filter(r => {
         const text = `${r.carrier} ${r.polCode} ${r.podCode} ${r.originCountry || ""} ${r.destCountry || ""}`;
         if (!applySearch(text)) return false;
-        if (equipFilter && r.equipmentType !== equipFilter) return false;
+        if (equipFilter && (r.equipmentType || "").toUpperCase() !== equipFilter.toUpperCase()) return false;
         if (rateTypeFilter && r.rateType !== rateTypeFilter) return false;
         if (carrierFilter && !(r.carrier || "").toLowerCase().includes(carrierFilter.toLowerCase())) return false;
         if (origCountryFilter && !(r.originCountry || "").toLowerCase().includes(origCountryFilter.toLowerCase())) return false;
@@ -410,9 +487,10 @@ export default function Rates() {
               <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", marginBottom: 3 }}>Equipment</div>
               <select value={equipFilter} onChange={e => setEquipFilter(e.target.value)} style={selectStyle}>
                 <option value="">All</option>
-                <option value="20ft">20FT</option>
-                <option value="40ft">40FT</option>
-                <option value="40hc">40HC</option>
+                <option value="20GP">20GP</option>
+                <option value="20FT">20FT</option>
+                <option value="40HC">40HC</option>
+                <option value="40RF">40RF</option>
               </select>
             </div>
             <div>
