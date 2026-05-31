@@ -207,11 +207,11 @@ function EmailMonitoringModal({ onClose }: { onClose: () => void }) {
                   <div style={{
                     width: 36, height: 36, borderRadius: "50%", display: "flex",
                     alignItems: "center", justifyContent: "center", flexShrink: 0,
-                    background: acc.provider === "outlook" ? "#e8f0fe" : "#fef2f2",
-                    border: `1px solid ${acc.provider === "outlook" ? "#bdd4f7" : "#fecaca"}`,
+                    background: acc.provider === "outlook" ? "#f5f5f5" : "#fef2f2",
+                    border: `1px solid ${acc.provider === "outlook" ? "#e0e0e0" : "#fecaca"}`,
                   }}>
                     {acc.provider === "outlook" ? (
-                      <svg width="22" height="22" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" fill="#0078D4"/><path d="M1 6l11 7 11-7" fill="none" stroke="#fff" strokeWidth="1.5"/><ellipse cx="8" cy="13" rx="5" ry="6" fill="#0A4E8A"/><ellipse cx="8" cy="13" rx="3.5" ry="4.5" fill="#fff"/></svg>
+                      <svg width="20" height="20" viewBox="0 0 21 21"><rect x="0" y="0" width="10" height="10" fill="#F25022"/><rect x="11" y="0" width="10" height="10" fill="#7FBA00"/><rect x="0" y="11" width="10" height="10" fill="#00A4EF"/><rect x="11" y="11" width="10" height="10" fill="#FFB900"/></svg>
                     ) : (
                       <svg width="22" height="22" viewBox="0 0 24 24"><path d="M22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6z" fill="#F4F4F4"/><path d="M22 6l-10 7L2 6" fill="none" stroke="#EA4335" strokeWidth="1.5"/><path d="M2 6h20" fill="none" stroke="#EA4335" strokeWidth="0"/><path d="M2 6l10 7" stroke="#F6B72A" strokeWidth="1.5" fill="none"/><path d="M22 6l-10 7" stroke="#4285F4" strokeWidth="1.5" fill="none"/><path d="M2 6v12h4V10l6 4.5L18 10v8h4V6" fill="none" stroke="#0F9D58" strokeWidth="0"/><rect x="2" y="4" width="4" height="16" rx="0" fill="#4285F4"/><rect x="18" y="4" width="4" height="16" rx="0" fill="#4285F4"/><path d="M2 6l10 7L22 6" fill="none" stroke="#D94F3F" strokeWidth="2"/></svg>
                     )}
