@@ -589,6 +589,96 @@ export default function RfqInbox() {
   const [composeDragging, setComposeDragging] = useState(false);
   const composeColRef = React.useRef<HTMLDivElement>(null);
 
+  // Quote modal state
+  const [showQuoteModal, setShowQuoteModal] = useState(false);
+  const [quoteStep, setQuoteStep] = useState<"rate-check" | "step1" | "step2" | "step3">("rate-check");
+  const [rateCheckStatus, setRateCheckStatus] = useState<"checking" | "found" | "no-rates">("checking");
+  const [partnerRoutes, setPartnerRoutes] = useState<{ pol: string; pod: string }[]>([]);
+  const [partnerEquipment, setPartnerEquipment] = useState("All");
+  const [partnerCommodityType, setPartnerCommodityType] = useState("General Cargo");
+  const [partnerValidityDate, setPartnerValidityDate] = useState("");
+  const [partnerSpecialNotes, setPartnerSpecialNotes] = useState("");
+  const [selectedPartners, setSelectedPartners] = useState<string[]>([]);
+  const [partnerEmailSubject, setPartnerEmailSubject] = useState("");
+  const [partnerEmailBody, setPartnerEmailBody] = useState("");
+  const [partnerSendSuccess, setPartnerSendSuccess] = useState(false);
+
+  // Partner outreach state
+  const [expandedOutreach, setExpandedOutreach] = useState<string | null>(null);
+  const [showAddRate, setShowAddRate] = useState(false);
+  const [newRate, setNewRate] = useState({ carrier: "", _20ft: "", _40ft: "", _40hc: "", transit: "", expiry: "", source: "Email" });
+
+  const MOCK_RATES = [
+    { carrier: "MSC", _20ft: 1250, _40ft: 2100, _40hc: 2250, transitDays: 28, validUntil: "2026-06-15" },
+    { carrier: "Maersk", _20ft: 1350, _40ft: 2200, _40hc: 2400, transitDays: 25, validUntil: "2026-06-10" },
+    { carrier: "CMA CGM", _20ft: 1180, _40ft: 1980, _40hc: 2150, transitDays: 30, validUntil: "2026-06-12" },
+  ];
+
+  const MOCK_PARTNERS = [
+    { id: "p1", name: "Global Freight Solutions", email: "rates@globalfreight.com", categories: ["FCL", "LCL"] },
+    { id: "p2", name: "SeaLink Logistics", email: "quotes@sealink.ng", categories: ["FCL", "DG"] },
+    { id: "p3", name: "AirCargo Express", email: "pricing@aircargo.com", categories: ["AIR", "LCL"] },
+    { id: "p4", name: "TransOcean Shipping", email: "ops@transocean.co", categories: ["FCL", "LCL", "AIR"] },
+    { id: "p5", name: "Prime Maritime", email: "commercial@primemaritime.com", categories: ["FCL"] },
+    { id: "p6", name: "Eagle Freight Int'l", email: "rates@eaglefreight.com", categories: ["FCL", "AIR", "DG"] },
+    { id: "p7", name: "Coastal Shipping Ltd", email: "info@coastalship.ng", categories: ["FCL", "LCL"] },
+    { id: "p8", name: "Apex Logistics", email: "quotes@apexlog.com", categories: ["AIR", "LCL", "DG"] },
+  ];
+
+  // Per-RFQ outreach: only some RFQs have outreach data, others are empty
+  const MOCK_OUTREACH_BY_INDEX: Record<number, any[]> = {
+    0: [
+      { id: "out1", partner: "Global Freight Solutions", email: "rates@globalfreight.com", sentAt: "30 May 10:14", status: "rates-received", routes: "NGAPP → BEANR", equipment: "40HC", ratesReceived: [{ carrier: "MSC", _20ft: 1850, _40ft: 2650, _40hc: 2850, transit: "18d", expiry: "2026-06-30" }], replies: [{ from: "rates@globalfreight.com", body: "Hi,\n\nPlease find below our best rates for Lagos-Antwerp:\n\nMSC: 20FT $1,850 / 40FT $2,650 / 40HC $2,850\nTransit: 18 days\nValid until 30 June 2026\n\nBest regards,\nGlobal Freight Team", date: "30 May 14:22" }] },
+      { id: "out2", partner: "West Africa Shipping Co", email: "quotes@washipping.com", sentAt: "30 May 10:14", status: "awaiting", routes: "NGAPP → BEANR", equipment: "40HC", ratesReceived: [], replies: [] },
+    ],
+    2: [
+      { id: "out3", partner: "Maersk Partner Agency", email: "ng.rates@maerskpartner.com", sentAt: "29 May 16:00", status: "rates-received", routes: "NGAPP → DEHAM", equipment: "40HC", ratesReceived: [{ carrier: "Maersk", _20ft: 2000, _40ft: 2900, _40hc: 3100, transit: "20d", expiry: "2026-07-15" }, { carrier: "Hapag-Lloyd", _20ft: 1950, _40ft: 2850, _40hc: 3050, transit: "21d", expiry: "2026-07-10" }], replies: [{ from: "ng.rates@maerskpartner.com", body: "Dear OnePort,\n\nHere are rates for Lagos-Hamburg:\n\nMaersk: $2,000 / $2,900 / $3,100 (20d)\nHapag-Lloyd: $1,950 / $2,850 / $3,050 (21d)\n\nValid through mid-July.\n\nRegards", date: "29 May 18:45" }] },
+    ],
+  };
+  const selectedIndex = rfqs.findIndex(r => r._id === selected?._id);
+  const currentOutreach = MOCK_OUTREACH_BY_INDEX[selectedIndex] || [];
+
+  const initPartnerWizard = () => {
+    if (!selected) return;
+    const pol = fieldVal(selected.fields || [], "pol");
+    const pod = fieldVal(selected.fields || [], "pod");
+    setPartnerRoutes([{ pol, pod }]);
+    setPartnerEquipment("All");
+    setPartnerCommodityType("General Cargo");
+    setPartnerValidityDate("");
+    setPartnerSpecialNotes("");
+    setSelectedPartners([]);
+    setPartnerSendSuccess(false);
+    setPartnerEmailSubject(`Rate Request — ${pol || "Origin"}–${pod || "Destination"} | OnePort 365`);
+    setPartnerEmailBody(
+`Dear Partner,
+
+We are requesting competitive rates for the following shipment:
+
+Route: ${pol || "TBD"} → ${pod || "TBD"}
+Commodity: ${fieldVal(selected.fields || [], "commodity") || "TBD"}
+Container: ${fieldVal(selected.fields || [], "container") || "TBD"}
+Weight: ${fieldVal(selected.fields || [], "weight") || "TBD"}
+
+Please provide your best all-in rates (USD) for 20FT, 40FT, and 40HC where applicable.
+
+Include:
+- Transit time
+- Free days at destination
+- Rate validity period
+- Any surcharges
+
+We look forward to your prompt response.
+
+Best regards,
+OnePort 365 Commercial Team`
+    );
+  };
+
+  const togglePartner = (id: string) => {
+    setSelectedPartners(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
   const handleMouseDown = (side: "left" | "right") => (e: React.MouseEvent) => {
     e.preventDefault();
     setDragging(side);
@@ -679,6 +769,7 @@ export default function RfqInbox() {
     setSelected(r);
     setBriefOpen(false);
     setThreadReplies([]);
+    setExpandedOutreach(null);
     if (r.followUpDraft) setReplyDraft(r.followUpDraft);
     else setReplyDraft("");
 
@@ -1459,19 +1550,219 @@ export default function RfqInbox() {
                   </div>
                 ))}
 
-              {/* Notes */}
-              <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "14px 0 6px" }}>Notes</div>
-              <textarea
-                defaultValue={selected.notes || ""}
-                onBlur={(e) => api.patch(`/rfqs/${selected._id}`, { notes: e.target.value })}
-                placeholder="Add notes..."
-                style={{ width: "100%", minHeight: 50, padding: 8, fontSize: 11, border: "1px solid var(--border)", borderRadius: 6, fontFamily: "Inter, sans-serif", resize: "vertical", outline: "none", color: "var(--text)", background: "var(--bg)" }}
-              />
+              {/* Partner Outreach */}
+              <div style={{ marginTop: 18 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Partner Outreach</span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, background: "var(--accent-light)", color: "var(--accent-dark)",
+                    padding: "2px 8px", borderRadius: 10, minWidth: 18, textAlign: "center",
+                  }}>{currentOutreach.length}</span>
+                </div>
+
+                {currentOutreach.length === 0 && (
+                  <div style={{ fontSize: 11, color: "var(--text3)", fontStyle: "italic", padding: "8px 0", textAlign: "center" }}>
+                    No partner outreach for this RFQ yet.
+                  </div>
+                )}
+                {currentOutreach.map((o) => {
+                  const isExpanded = expandedOutreach === o.id;
+                  const statusColor = o.status === "rates-received" ? "#16a34a" : o.status === "awaiting" ? "#d97706" : "#9ca3af";
+                  const statusBg = o.status === "rates-received" ? "#f0fdf4" : o.status === "awaiting" ? "#fffbeb" : "#f9fafb";
+                  const statusLabel = o.status === "rates-received" ? "Rates Received" : o.status === "awaiting" ? "Awaiting Reply" : "No Response";
+
+                  return (
+                    <div key={o.id} style={{
+                      border: "1px solid var(--border)", borderRadius: 8, marginBottom: 6,
+                      background: isExpanded ? "var(--bg)" : "transparent",
+                      transition: "background 0.15s",
+                    }}>
+                      {/* Outreach card header */}
+                      <div
+                        onClick={() => setExpandedOutreach(isExpanded ? null : o.id)}
+                        style={{
+                          padding: "8px 10px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 4,
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text)" }}>{o.partner}</span>
+                          <span style={{
+                            fontSize: 9, fontWeight: 600, color: statusColor, background: statusBg,
+                            padding: "2px 7px", borderRadius: 4, border: `1px solid ${statusColor}20`,
+                          }}>{statusLabel}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 10, color: "var(--text3)" }}>{o.email}</span>
+                          <span style={{ fontSize: 9, color: "var(--text3)" }}>{o.sentAt}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+                          <span style={{ fontSize: 9, fontWeight: 500, color: "var(--text3)", background: "var(--border)", padding: "1px 6px", borderRadius: 3 }}>{o.routes}</span>
+                          <span style={{ fontSize: 9, fontWeight: 500, color: "var(--text3)", background: "var(--border)", padding: "1px 6px", borderRadius: 3 }}>{o.equipment}</span>
+                        </div>
+                      </div>
+
+                      {/* Expanded content */}
+                      {isExpanded && (
+                        <div style={{ padding: "0 10px 10px", borderTop: "1px solid var(--border)" }}>
+                          {/* Reply email body */}
+                          {o.replies.length > 0 && o.replies.map((r, ri) => (
+                            <div key={ri} style={{ marginTop: 8 }}>
+                              <div style={{ fontSize: 9, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", marginBottom: 4 }}>Reply from {r.from}</div>
+                              <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 4 }}>{r.date}</div>
+                              <div style={{
+                                fontSize: 11, color: "var(--text)", background: "var(--surface)", border: "1px solid var(--border)",
+                                borderRadius: 6, padding: "8px 10px", whiteSpace: "pre-wrap", lineHeight: 1.5, marginBottom: 8,
+                              }}>{r.body}</div>
+                            </div>
+                          ))}
+
+                          {/* Rates table */}
+                          {o.ratesReceived.length > 0 && (
+                            <div style={{ marginTop: 6 }}>
+                              <div style={{ fontSize: 9, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", marginBottom: 4 }}>Rates Received</div>
+                              <table style={{ width: "100%", fontSize: 10, borderCollapse: "collapse" }}>
+                                <thead>
+                                  <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                                    {["Carrier", "20FT", "40FT", "40HC", "Transit", "Expiry"].map(h => (
+                                      <th key={h} style={{ padding: "4px 4px", textAlign: "left", fontWeight: 600, color: "var(--text3)", fontSize: 9 }}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {o.ratesReceived.map((rate, ri) => (
+                                    <tr key={ri} style={{ borderBottom: "1px solid var(--border)" }}>
+                                      <td style={{ padding: "4px", fontWeight: 500, color: "var(--text)" }}>{rate.carrier}</td>
+                                      <td style={{ padding: "4px", color: "var(--text)" }}>${rate._20ft.toLocaleString()}</td>
+                                      <td style={{ padding: "4px", color: "var(--text)" }}>${rate._40ft.toLocaleString()}</td>
+                                      <td style={{ padding: "4px", color: "var(--text)" }}>${rate._40hc.toLocaleString()}</td>
+                                      <td style={{ padding: "4px", color: "var(--text3)" }}>{rate.transit}</td>
+                                      <td style={{ padding: "4px", color: "var(--text3)" }}>{rate.expiry}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                                <button
+                                  onClick={() => alert("Rates added to database")}
+                                  style={{
+                                    fontSize: 10, fontWeight: 600, padding: "5px 12px", borderRadius: 6,
+                                    background: "#16a34a", color: "#fff", border: "none", cursor: "pointer",
+                                  }}
+                                >Use These Rates</button>
+                                <button
+                                  onClick={() => alert("Reply composing...")}
+                                  style={{
+                                    fontSize: 10, fontWeight: 600, padding: "5px 12px", borderRadius: 6,
+                                    background: "transparent", color: "var(--text)", border: "1px solid var(--border)", cursor: "pointer",
+                                  }}
+                                >Reply</button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* No rates yet */}
+                          {o.ratesReceived.length === 0 && o.replies.length === 0 && (
+                            <div style={{ marginTop: 8, fontSize: 11, color: "var(--text3)", fontStyle: "italic", padding: "8px 0" }}>
+                              No reply received yet.
+                              <button
+                                onClick={() => alert("Reply composing...")}
+                                style={{
+                                  fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 6, marginLeft: 8,
+                                  background: "transparent", color: "var(--text)", border: "1px solid var(--border)", cursor: "pointer",
+                                }}
+                              >Follow Up</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Divider + Add Rate Manually */}
+                <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10 }}>
+                  {!showAddRate ? (
+                    <button
+                      onClick={() => setShowAddRate(true)}
+                      style={{
+                        width: "100%", fontSize: 11, fontWeight: 600, padding: "8px 0", borderRadius: 6,
+                        background: "transparent", color: "var(--accent-dark)", border: "1px dashed var(--border)",
+                        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                      }}
+                    >+ Add Rate Manually</button>
+                  ) : (
+                    <div style={{
+                      border: "1px solid var(--border)", borderRadius: 8, padding: 10,
+                      background: "var(--bg)",
+                    }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Add Rate Manually</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <input
+                          type="text" placeholder="Carrier name"
+                          value={newRate.carrier} onChange={e => setNewRate({ ...newRate, carrier: e.target.value })}
+                          style={{ width: "100%", padding: "6px 8px", fontSize: 11, border: "1px solid var(--border2)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                        />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input
+                            type="number" placeholder="20FT ($)"
+                            value={newRate._20ft} onChange={e => setNewRate({ ...newRate, _20ft: e.target.value })}
+                            style={{ flex: 1, padding: "6px 8px", fontSize: 11, border: "1px solid var(--border2)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                          />
+                          <input
+                            type="number" placeholder="40FT ($)"
+                            value={newRate._40ft} onChange={e => setNewRate({ ...newRate, _40ft: e.target.value })}
+                            style={{ flex: 1, padding: "6px 8px", fontSize: 11, border: "1px solid var(--border2)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                          />
+                          <input
+                            type="number" placeholder="40HC ($)"
+                            value={newRate._40hc} onChange={e => setNewRate({ ...newRate, _40hc: e.target.value })}
+                            style={{ flex: 1, padding: "6px 8px", fontSize: 11, border: "1px solid var(--border2)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input
+                            type="text" placeholder="Transit (e.g. 18 days)"
+                            value={newRate.transit} onChange={e => setNewRate({ ...newRate, transit: e.target.value })}
+                            style={{ flex: 1, padding: "6px 8px", fontSize: 11, border: "1px solid var(--border2)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                          />
+                          <input
+                            type="date" placeholder="Expiry"
+                            value={newRate.expiry} onChange={e => setNewRate({ ...newRate, expiry: e.target.value })}
+                            style={{ flex: 1, padding: "6px 8px", fontSize: 11, border: "1px solid var(--border2)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                          />
+                        </div>
+                        <select
+                          value={newRate.source} onChange={e => setNewRate({ ...newRate, source: e.target.value })}
+                          style={{ width: "100%", padding: "6px 8px", fontSize: 11, border: "1px solid var(--border2)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif", background: "var(--surface)" }}
+                        >
+                          {["Phone call", "WhatsApp", "Email", "Website"].map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                          <button
+                            onClick={() => { alert("Rate saved to database"); setShowAddRate(false); setNewRate({ carrier: "", _20ft: "", _40ft: "", _40hc: "", transit: "", expiry: "", source: "Email" }); }}
+                            style={{
+                              flex: 1, fontSize: 11, fontWeight: 600, padding: "7px 0", borderRadius: 6,
+                              background: "#16a34a", color: "#fff", border: "none", cursor: "pointer",
+                            }}
+                          >Save Rate</button>
+                          <button
+                            onClick={() => { setShowAddRate(false); setNewRate({ carrier: "", _20ft: "", _40ft: "", _40hc: "", transit: "", expiry: "", source: "Email" }); }}
+                            style={{
+                              flex: 1, fontSize: 11, fontWeight: 600, padding: "7px 0", borderRadius: 6,
+                              background: "transparent", color: "var(--text)", border: "1px solid var(--border)", cursor: "pointer",
+                            }}
+                          >Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* Generate Quote */}
               <button
                 className="btn btn-primary"
-                onClick={() => generateQuote(selected._id)}
+                onClick={() => { setShowQuoteModal(true); setQuoteStep("rate-check"); setRateCheckStatus("checking"); setTimeout(() => setRateCheckStatus("no-rates"), 1500); }}
                 disabled={generating}
                 style={{
                   width: "100%", marginTop: 16, padding: "10px 0", fontSize: 12,
@@ -1493,6 +1784,421 @@ export default function RfqInbox() {
       {/* Email Monitoring Modal */}
       {showEmailMonitor && <EmailMonitoringModal onClose={() => setShowEmailMonitor(false)} />}
     </div>
+      )}
+
+      {/* ===== GENERATE QUOTE MODAL ===== */}
+      {showQuoteModal && selected && (
+        <div
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 1100,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowQuoteModal(false); setPartnerSendSuccess(false); } }}
+        >
+          <div style={{
+            background: "var(--surface)", borderRadius: 14, width: 600, maxHeight: "85vh",
+            overflow: "auto", padding: "24px 28px", position: "relative",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+          }}>
+            {/* Close button */}
+            <button
+              onClick={() => { setShowQuoteModal(false); setPartnerSendSuccess(false); }}
+              style={{
+                position: "absolute", top: 16, right: 16,
+                background: "none", border: "none", cursor: "pointer", padding: 4,
+                color: "var(--text3)", fontSize: 18, lineHeight: 1,
+              }}
+            >
+              <X size={20} />
+            </button>
+
+            {/* ---- RATE CHECK SCREEN ---- */}
+            {quoteStep === "rate-check" && (
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 16 }}>Generate Quote</div>
+
+                {/* RFQ Summary */}
+                <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "12px 16px", marginBottom: 20 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>RFQ Summary</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", fontSize: 12 }}>
+                    <div><span style={{ color: "var(--text3)" }}>Customer:</span> <span style={{ color: "var(--text)", fontWeight: 500 }}>{fieldVal(selected.fields || [], "customer") || "—"}</span></div>
+                    <div><span style={{ color: "var(--text3)" }}>Company:</span> <span style={{ color: "var(--text)", fontWeight: 500 }}>{fieldVal(selected.fields || [], "company") || "—"}</span></div>
+                    <div><span style={{ color: "var(--text3)" }}>Route:</span> <span style={{ color: "var(--text)", fontWeight: 500 }}>{fieldVal(selected.fields || [], "pol") || "?"} → {fieldVal(selected.fields || [], "pod") || "?"}</span></div>
+                    <div><span style={{ color: "var(--text3)" }}>Commodity:</span> <span style={{ color: "var(--text)", fontWeight: 500 }}>{fieldVal(selected.fields || [], "commodity") || "—"}</span></div>
+                    <div><span style={{ color: "var(--text3)" }}>Container:</span> <span style={{ color: "var(--text)", fontWeight: 500 }}>{fieldVal(selected.fields || [], "container") || "—"}</span></div>
+                    <div><span style={{ color: "var(--text3)" }}>Mode:</span> <span style={{ color: "var(--text)", fontWeight: 500 }}>{fieldVal(selected.fields || [], "freight mode") || "—"}</span></div>
+                  </div>
+                </div>
+
+                {/* Rate check status */}
+                {rateCheckStatus === "checking" && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "30px 0", color: "var(--text2)" }}>
+                    <div style={{ width: 18, height: 18, border: "2px solid var(--border)", borderTop: "2px solid var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                    <span style={{ fontSize: 13 }}>Checking rates...</span>
+                  </div>
+                )}
+
+                {rateCheckStatus === "found" && (
+                  <div>
+                    <button onClick={() => setRateCheckStatus("no-rates")} style={{
+                      background: "none", border: "none", cursor: "pointer", color: "var(--accent)",
+                      fontSize: 11, fontWeight: 500, padding: 0, marginBottom: 10, display: "flex", alignItems: "center", gap: 4,
+                    }}>← Back to options</button>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Matching Rates</div>
+                    {MOCK_RATES.map((rate, i) => (
+                      <div key={i} style={{
+                        display: "grid", gridTemplateColumns: "100px 1fr 1fr 1fr 80px",
+                        padding: "10px 12px", marginBottom: 4, borderRadius: 6,
+                        background: i === 0 ? "#e6f7ec" : "var(--bg)", border: `1px solid ${i === 0 ? "#86efac" : "var(--border)"}`,
+                        fontSize: 12, alignItems: "center",
+                      }}>
+                        <span style={{ fontWeight: 600, color: "var(--text)" }}>{rate.carrier}</span>
+                        <span style={{ color: "var(--text2)" }}>20FT: <strong>${rate._20ft}</strong></span>
+                        <span style={{ color: "var(--text2)" }}>40FT: <strong>${rate._40ft}</strong></span>
+                        <span style={{ color: "var(--text2)" }}>40HC: <strong>${rate._40hc}</strong></span>
+                        <span style={{ fontSize: 10, color: "var(--text3)" }}>{rate.transitDays}d transit</span>
+                      </div>
+                    ))}
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => generateQuote(selected._id)}
+                      disabled={generating}
+                      style={{ width: "100%", marginTop: 16, padding: "10px 0", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                    >
+                      {generating ? "Generating..." : "Generate Quote with these rates"}
+                    </button>
+                  </div>
+                )}
+
+                {rateCheckStatus === "no-rates" && (
+                  <div>
+                    <button onClick={() => { setRateCheckStatus("checking"); setTimeout(() => setRateCheckStatus("no-rates"), 800); }} style={{
+                      background: "none", border: "none", cursor: "pointer", color: "var(--accent)",
+                      fontSize: 11, fontWeight: 500, padding: 0, marginBottom: 10, display: "flex", alignItems: "center", gap: 4,
+                    }}>← Re-check rates</button>
+                    <div style={{
+                      textAlign: "center", padding: "24px 16px", background: "#fffbeb",
+                      border: "1px solid #fde68a", borderRadius: 8, marginBottom: 16,
+                    }}>
+                      <div style={{ fontSize: 24, marginBottom: 8 }}>📭</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#92400e", marginBottom: 4 }}>No rates found for this lane</div>
+                      <div style={{ fontSize: 12, color: "#b45309" }}>
+                        {fieldVal(selected.fields || [], "pol") || "Origin"} → {fieldVal(selected.fields || [], "pod") || "Destination"}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button
+                        className="btn"
+                        style={{ flex: 1, padding: "10px 0", fontSize: 12, fontWeight: 600, background: "var(--accent)", color: "#fff", border: "none" }}
+                        onClick={() => { setRateCheckStatus("found"); }}
+                      >
+                        Fetch Spot Rates
+                      </button>
+                      <button
+                        className="btn"
+                        style={{ flex: 1, padding: "10px 0", fontSize: 12, fontWeight: 600 }}
+                        onClick={() => { initPartnerWizard(); setQuoteStep("step1"); }}
+                      >
+                        Contact Partner
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ---- STEP 1: ROUTE DETAILS ---- */}
+            {quoteStep === "step1" && (
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Contact Partner</div>
+                <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 16 }}>Step 1 of 3 — Route Details</div>
+
+                {/* Progress dots */}
+                <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
+                  {[1, 2, 3].map(s => (
+                    <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: s === 1 ? "var(--accent)" : "var(--border)" }} />
+                  ))}
+                </div>
+
+                {/* Route rows */}
+                <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Routes</div>
+                {partnerRoutes.map((route, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                    <input
+                      type="text"
+                      value={route.pol}
+                      onChange={(e) => { const r = [...partnerRoutes]; r[i] = { ...r[i], pol: e.target.value }; setPartnerRoutes(r); }}
+                      placeholder="POL"
+                      style={{ flex: 1, padding: "8px 12px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                    />
+                    <span style={{ fontSize: 14, color: "var(--text3)" }}>→</span>
+                    <input
+                      type="text"
+                      value={route.pod}
+                      onChange={(e) => { const r = [...partnerRoutes]; r[i] = { ...r[i], pod: e.target.value }; setPartnerRoutes(r); }}
+                      placeholder="POD"
+                      style={{ flex: 1, padding: "8px 12px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                    />
+                    {partnerRoutes.length > 1 && (
+                      <button onClick={() => setPartnerRoutes(partnerRoutes.filter((_, j) => j !== i))} style={{
+                        background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 16, padding: "0 4px",
+                      }}>×</button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  onClick={() => setPartnerRoutes([...partnerRoutes, { pol: "", pod: "" }])}
+                  style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: "4px 0", marginBottom: 16 }}
+                >
+                  + Add Route
+                </button>
+
+                {/* Equipment type */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Equipment Type</div>
+                    <select
+                      value={partnerEquipment}
+                      onChange={(e) => setPartnerEquipment(e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", background: "var(--surface)", fontFamily: "Inter, sans-serif" }}
+                    >
+                      <option>All</option>
+                      <option>20FT only</option>
+                      <option>40FT only</option>
+                      <option>40HC only</option>
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Commodity Type</div>
+                    <select
+                      value={partnerCommodityType}
+                      onChange={(e) => setPartnerCommodityType(e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", background: "var(--surface)", fontFamily: "Inter, sans-serif" }}
+                    >
+                      <option>General Cargo</option>
+                      <option>Hazardous</option>
+                      <option>Reefer</option>
+                      <option>Oversized</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Validity date */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Rate Validity Date</div>
+                  <input
+                    type="date"
+                    value={partnerValidityDate}
+                    onChange={(e) => setPartnerValidityDate(e.target.value)}
+                    style={{ width: "100%", padding: "8px 12px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                  />
+                </div>
+
+                {/* Special notes */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Special Notes</div>
+                  <textarea
+                    value={partnerSpecialNotes}
+                    onChange={(e) => setPartnerSpecialNotes(e.target.value)}
+                    placeholder="Any special requirements..."
+                    style={{ width: "100%", minHeight: 60, padding: "8px 12px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, fontFamily: "Inter, sans-serif", resize: "vertical", outline: "none", color: "var(--text)" }}
+                  />
+                </div>
+
+                {/* Next button */}
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      const valid = partnerRoutes.every(r => r.pol.trim() && r.pod.trim());
+                      if (!valid) { alert("Please fill in all POL and POD fields."); return; }
+                      setQuoteStep("step2");
+                    }}
+                    style={{ padding: "10px 24px", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ---- STEP 2: SELECT PARTNERS ---- */}
+            {quoteStep === "step2" && (
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Contact Partner</div>
+                <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 16 }}>Step 2 of 3 — Select Partners</div>
+
+                {/* Progress dots */}
+                <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
+                  {[1, 2, 3].map(s => (
+                    <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: s <= 2 ? "var(--accent)" : "var(--border)" }} />
+                  ))}
+                </div>
+
+                <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 12 }}>
+                  Select partners to request rates from. <strong>{selectedPartners.length}</strong> selected.
+                </div>
+
+                {/* Partner cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
+                  {MOCK_PARTNERS.map(p => {
+                    const isSelected = selectedPartners.includes(p.id);
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => togglePartner(p.id)}
+                        style={{
+                          padding: "12px 14px", borderRadius: 8, cursor: "pointer",
+                          border: isSelected ? "2px solid var(--accent)" : "1px solid var(--border)",
+                          background: isSelected ? "#e6f7ec" : "var(--surface)",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                          <div style={{
+                            width: 16, height: 16, borderRadius: 4, border: isSelected ? "none" : "2px solid var(--border)",
+                            background: isSelected ? "var(--accent)" : "transparent",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            color: "#fff", fontSize: 10, fontWeight: 700, flexShrink: 0,
+                          }}>
+                            {isSelected && "✓"}
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{p.name}</span>
+                        </div>
+                        <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 6, marginLeft: 24 }}>{p.email}</div>
+                        <div style={{ display: "flex", gap: 4, marginLeft: 24, flexWrap: "wrap" }}>
+                          {p.categories.map(c => (
+                            <span key={c} className={`badge ${c === "DG" ? "b-miss" : c === "AIR" ? "b-wait" : "b-rate"}`} style={{ fontSize: 9 }}>{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Navigation */}
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <button
+                    className="btn"
+                    onClick={() => setQuoteStep("step1")}
+                    style={{ padding: "10px 24px", fontSize: 12 }}
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      if (selectedPartners.length === 0) { alert("Please select at least one partner."); return; }
+                      // Update email subject with latest route info
+                      const r0 = partnerRoutes[0] || { pol: "", pod: "" };
+                      setPartnerEmailSubject(`Rate Request — ${r0.pol || "Origin"}–${r0.pod || "Destination"} | OnePort 365`);
+                      setQuoteStep("step3");
+                    }}
+                    style={{ padding: "10px 24px", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ---- STEP 3: REVIEW & SEND ---- */}
+            {quoteStep === "step3" && (
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Contact Partner</div>
+                <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 16 }}>Step 3 of 3 — Review & Send</div>
+
+                {/* Progress dots */}
+                <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
+                  {[1, 2, 3].map(s => (
+                    <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: "var(--accent)" }} />
+                  ))}
+                </div>
+
+                {partnerSendSuccess ? (
+                  <div style={{ textAlign: "center", padding: "40px 20px" }}>
+                    <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>Rate Request Sent!</div>
+                    <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 4 }}>
+                      Emails sent to {selectedPartners.length} partner{selectedPartners.length > 1 ? "s" : ""}.
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 24 }}>
+                      {MOCK_PARTNERS.filter(p => selectedPartners.includes(p.id)).map(p => p.email).join(", ")}
+                    </div>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => { setShowQuoteModal(false); setPartnerSendSuccess(false); }}
+                      style={{ padding: "10px 28px", fontSize: 12 }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Recipients */}
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Recipients ({selectedPartners.length})</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {MOCK_PARTNERS.filter(p => selectedPartners.includes(p.id)).map(p => (
+                          <span key={p.id} style={{
+                            padding: "4px 10px", fontSize: 11, background: "var(--bg)",
+                            border: "1px solid var(--border)", borderRadius: 12, color: "var(--text2)",
+                          }}>
+                            {p.name} &lt;{p.email}&gt;
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Subject */}
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Subject</div>
+                      <input
+                        type="text"
+                        value={partnerEmailSubject}
+                        onChange={(e) => setPartnerEmailSubject(e.target.value)}
+                        style={{ width: "100%", padding: "8px 12px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, outline: "none", color: "var(--text)", fontFamily: "Inter, sans-serif" }}
+                      />
+                    </div>
+
+                    {/* Email body */}
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Email Body</div>
+                      <textarea
+                        value={partnerEmailBody}
+                        onChange={(e) => setPartnerEmailBody(e.target.value)}
+                        style={{ width: "100%", minHeight: 200, padding: "10px 14px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, fontFamily: "Inter, sans-serif", resize: "vertical", outline: "none", color: "var(--text)", lineHeight: 1.6 }}
+                      />
+                    </div>
+
+                    {/* Navigation */}
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <button
+                        className="btn"
+                        onClick={() => setQuoteStep("step2")}
+                        style={{ padding: "10px 24px", fontSize: 12 }}
+                      >
+                        ← Back
+                      </button>
+                      <button
+                        onClick={() => setPartnerSendSuccess(true)}
+                        style={{
+                          padding: "10px 28px", fontSize: 12, fontWeight: 600,
+                          background: "#16a34a", color: "#fff", border: "none", borderRadius: 6,
+                          cursor: "pointer", fontFamily: "Inter, sans-serif",
+                          display: "flex", alignItems: "center", gap: 6,
+                        }}
+                      >
+                        Send Email
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
     </div>
