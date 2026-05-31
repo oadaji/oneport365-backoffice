@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useState } from "react";
-import { Mail, RefreshCw, Trash2, X, ChevronRight, MessageCircle, Globe } from "lucide-react";
+import { Mail, RefreshCw, Trash2, X, ChevronRight, MessageCircle, Globe, Users } from "lucide-react";
 import api from "../lib/api";
 
 interface Rfq {
@@ -1100,8 +1100,11 @@ OnePort 365 Commercial Team`
             </div>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
-            <button className="btn btn-sm" style={{ padding: "3px 6px", display: "flex", alignItems: "center", gap: 4 }} title="Inboxes" onClick={() => setShowEmailMonitor(true)}>
-              <Mail size={12} /> ...
+            <button className="btn btn-sm" style={{ padding: "3px 6px", display: "flex", alignItems: "center" }} title="Inboxes" onClick={() => setShowEmailMonitor(true)}>
+              <Mail size={12} />
+            </button>
+            <button className="btn btn-sm" style={{ padding: "3px 6px", display: "flex", alignItems: "center" }} title="Contact Partners" onClick={() => { if (selected) { initPartnerWizard(); setShowQuoteModal(true); setQuoteStep("step1"); } }}>
+              <Users size={12} />
             </button>
             <button
               className="btn btn-sm"
