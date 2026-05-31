@@ -1,8 +1,10 @@
 import * as msal from "@azure/msal-node";
 import crypto from "crypto";
+import axios from "axios";
 
 const clientId = process.env.MICROSOFT_CLIENT_ID || "";
 const clientSecret = process.env.MICROSOFT_CLIENT_SECRET || "";
+const tenantId = "4142fdca-ff6c-4f47-b52e-054abe525951";
 const redirectUri =
   process.env.MICROSOFT_REDIRECT_URI ||
   "http://localhost:5001/api/auth/microsoft/callback";
@@ -20,7 +22,7 @@ function getClient(): msal.ConfidentialClientApplication {
     auth: {
       clientId,
       clientSecret,
-      authority: "https://login.microsoftonline.com/4142fdca-ff6c-4f47-b52e-054abe525951",
+      authority: `https://login.microsoftonline.com/${tenantId}`,
     },
   });
 }
@@ -37,7 +39,7 @@ export async function getAuthUrl(state?: string): Promise<string> {
   });
 }
 
-/** Exchange authorization code for tokens */
+/** Exchange authorization code for tokens — raw HTTP to get refresh_token */
 export async function exchangeCode(code: string): Promise<{
   accessToken: string;
   refreshToken: string;
@@ -45,49 +47,71 @@ export async function exchangeCode(code: string): Promise<{
   email: string;
   name: string;
 }> {
-  const client = getClient();
-  const result = await client.acquireTokenByCode({
+  const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
     code,
-    scopes: SCOPES,
-    redirectUri,
+    redirect_uri: redirectUri,
+    grant_type: "authorization_code",
+    scope: SCOPES.join(" "),
   });
 
-  if (!result) throw new Error("Token exchange failed");
+  const { data } = await axios.post(tokenUrl, params.toString(), {
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  });
 
-  const claims = result.idTokenClaims as Record<string, any>;
-  const email =
-    claims?.preferred_username ||
-    claims?.email ||
-    result.account?.username ||
-    "";
+  if (!data.access_token) throw new Error("Token exchange failed — no access_token");
+
+  // Decode the id_token to get email/name
+  let email = "";
+  let name = "";
+  if (data.id_token) {
+    try {
+      const payload = JSON.parse(Buffer.from(data.id_token.split(".")[1], "base64").toString());
+      email = payload.preferred_username || payload.email || payload.upn || "";
+      name = payload.name || "";
+    } catch {}
+  }
+
+  console.log(`[OUTLOOK] Token exchange success — email=${email}, hasRefresh=${!!data.refresh_token}, expiresIn=${data.expires_in}s`);
 
   return {
-    accessToken: result.accessToken,
-    refreshToken: (result as any).refreshToken || "",
-    expiresAt: result.expiresOn || new Date(Date.now() + 3600 * 1000),
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || "",
+    expiresAt: new Date(Date.now() + (data.expires_in || 3600) * 1000),
     email: email.toLowerCase(),
-    name: claims?.name || email,
+    name,
   };
 }
 
-/** Refresh an expired access token */
+/** Refresh an expired access token — raw HTTP */
 export async function refreshAccessToken(refreshToken: string): Promise<{
   accessToken: string;
   refreshToken: string;
   expiresAt: Date;
 }> {
-  const client = getClient();
-  const result = await client.acquireTokenByRefreshToken({
-    refreshToken,
-    scopes: SCOPES,
+  const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: refreshToken,
+    grant_type: "refresh_token",
+    scope: SCOPES.join(" "),
   });
 
-  if (!result) throw new Error("Token refresh failed");
+  const { data } = await axios.post(tokenUrl, params.toString(), {
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  });
+
+  if (!data.access_token) throw new Error("Token refresh failed");
 
   return {
-    accessToken: result.accessToken,
-    refreshToken: (result as any).refreshToken || refreshToken,
-    expiresAt: result.expiresOn || new Date(Date.now() + 3600 * 1000),
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || refreshToken,
+    expiresAt: new Date(Date.now() + (data.expires_in || 3600) * 1000),
   };
 }
 
