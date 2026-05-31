@@ -45,9 +45,13 @@ async function getAccountsToSync(): Promise<SyncAccount[]> {
 
   // All accounts from DB (added via Email Monitoring UI)
   const dbAccounts = await EmailAccount.find({ active: true });
+
+  // Find the donor account for shared mailboxes (first non-shared OAuth2 outlook account)
+  const donor = dbAccounts.find(a => a.provider === "outlook" && a.authType === "oauth2" && !a.shared && a.refreshToken);
+
   for (const acc of dbAccounts) {
     if (accounts.some((a) => a.email === acc.email)) continue;
-    const isOutlook = ["outlook", "hotmail", "live", "msn"].some((d) => acc.email.includes(d));
+    const isOutlook = acc.provider === "outlook" || ["outlook", "hotmail", "live", "msn"].some((d) => acc.email.includes(d));
 
     const syncAcc: SyncAccount = {
       id: acc._id.toString(),
@@ -63,16 +67,25 @@ async function getAccountsToSync(): Promise<SyncAccount[]> {
       tokenExpiresAt: acc.tokenExpiresAt,
     };
 
+    // For shared mailboxes, borrow tokens from the donor
+    if (acc.shared && acc.authType === "oauth2" && donor) {
+      syncAcc.refreshToken = donor.refreshToken;
+      syncAcc.accessToken = donor.accessToken;
+      syncAcc.tokenExpiresAt = donor.tokenExpiresAt;
+    }
+
     // For OAuth2 accounts, get a valid access token (refresh if needed)
-    if (acc.authType === "oauth2" && acc.refreshToken) {
+    const refreshToken = syncAcc.refreshToken;
+    if (acc.authType === "oauth2" && refreshToken) {
       try {
-        const token = await getValidToken(acc);
+        const token = await getValidToken({ accessToken: syncAcc.accessToken, refreshToken, tokenExpiresAt: syncAcc.tokenExpiresAt });
         syncAcc.accessToken = token;
 
-        // If token was refreshed, persist new tokens
-        if (token !== acc.accessToken) {
-          const refreshed = await refreshAccessToken(acc.refreshToken);
-          await EmailAccount.findByIdAndUpdate(acc._id, {
+        // If token was refreshed, persist new tokens on the source account (donor for shared)
+        if (token !== syncAcc.accessToken) {
+          const refreshed = await refreshAccessToken(refreshToken);
+          const updateId = acc.shared && donor ? donor._id : acc._id;
+          await EmailAccount.findByIdAndUpdate(updateId, {
             accessToken: refreshed.accessToken,
             refreshToken: refreshed.refreshToken,
             tokenExpiresAt: refreshed.expiresAt,
