@@ -605,6 +605,7 @@ export default function RfqInbox() {
   ]);
   const [newPartner, setNewPartner] = useState({ name: "", email: "", phone: "", categories: "" });
   const [editingPartnerId, setEditingPartnerId] = useState<string | null>(null);
+  const [contactRfqId, setContactRfqId] = useState<string | null>(null);
   const [quoteStep, setQuoteStep] = useState<"rate-check" | "step1" | "step2" | "step3">("rate-check");
   const [rateCheckStatus, setRateCheckStatus] = useState<"checking" | "found" | "no-rates">("checking");
   const [partnerRoutes, setPartnerRoutes] = useState<{ pol: string; pod: string }[]>([]);
@@ -1106,7 +1107,7 @@ OnePort 365 Commercial Team`
             <button className="btn btn-sm" style={{ padding: "3px 6px", display: "flex", alignItems: "center" }} title="Inboxes" onClick={() => setShowEmailMonitor(true)}>
               <Mail size={12} />
             </button>
-            <button className="btn btn-sm" style={{ padding: "3px 6px", display: "flex", alignItems: "center" }} title="Partners" onClick={() => { setShowPartnerModal(true); setPartnerTab("manage"); }}>
+            <button className="btn btn-sm" style={{ padding: "3px 6px", display: "flex", alignItems: "center" }} title="Partners" onClick={() => { setShowPartnerModal(true); setPartnerTab("manage"); setContactRfqId(selected?._id || null); }}>
               <Users size={12} />
             </button>
             <button
@@ -2402,21 +2403,41 @@ OnePort 365 Commercial Team`
             )}
 
             {/* ---- CONTACT TAB ---- */}
-            {partnerTab === "contact" && (
+            {partnerTab === "contact" && (() => {
+              const contactRfq = rfqs.find(r => r._id === contactRfqId) || null;
+              return (
               <div>
-                {selected ? (
-                  <div>
-                    <div style={{
-                      padding: "10px 14px", borderRadius: 8, background: "var(--bg)",
-                      border: "1px solid var(--border)", marginBottom: 16,
-                    }}>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Linked RFQ</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{selected.ref}</div>
-                      <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                        {fieldVal(selected.fields || [], "pol") || "—"} → {fieldVal(selected.fields || [], "pod") || "—"} | {fieldVal(selected.fields || [], "commodity") || "—"}
-                      </div>
+                {/* RFQ dropdown selector */}
+                <div style={{
+                  padding: "10px 14px", borderRadius: 8, background: "var(--bg)",
+                  border: "1px solid var(--border)", marginBottom: 16,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Link to RFQ</div>
+                  <select
+                    value={contactRfqId || ""}
+                    onChange={e => { setContactRfqId(e.target.value || null); setSelectedPartners([]); }}
+                    style={{
+                      width: "100%", padding: "8px 12px", fontSize: 12, border: "1px solid var(--border)",
+                      borderRadius: 6, outline: "none", color: "var(--text)", background: "var(--surface)",
+                      fontFamily: "Inter, sans-serif", cursor: "pointer",
+                    }}
+                  >
+                    <option value="">— Select an RFQ —</option>
+                    {rfqs.map(r => (
+                      <option key={r._id} value={r._id}>
+                        {r.ref} — {fieldVal(r.fields || [], "pol") || "?"} → {fieldVal(r.fields || [], "pod") || "?"} | {fieldVal(r.fields || [], "commodity") || "N/A"}
+                      </option>
+                    ))}
+                  </select>
+                  {contactRfq && (
+                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>
+                      {fieldVal(contactRfq.fields || [], "pol") || "—"} → {fieldVal(contactRfq.fields || [], "pod") || "—"} | {fieldVal(contactRfq.fields || [], "commodity") || "—"}
                     </div>
+                  )}
+                </div>
 
+                {contactRfq ? (
+                  <div>
                     <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 12 }}>
                       Select partners to request rates for this shipment, then proceed to compose your email.
                     </div>
@@ -2467,9 +2488,14 @@ OnePort 365 Commercial Team`
                         onClick={() => {
                           if (selectedPartners.length === 0) { alert("Select at least one partner."); return; }
                           setShowPartnerModal(false);
-                          initPartnerWizard();
-                          setShowQuoteModal(true);
-                          setQuoteStep("step1");
+                          // Select the contact RFQ in the inbox so initPartnerWizard picks it up
+                          const rfq = rfqs.find(r => r._id === contactRfqId);
+                          if (rfq) selectRfq(rfq);
+                          setTimeout(() => {
+                            initPartnerWizard();
+                            setShowQuoteModal(true);
+                            setQuoteStep("step1");
+                          }, 50);
                         }}
                         style={{
                           padding: "10px 24px", fontSize: 12, fontWeight: 600, borderRadius: 6,
@@ -2484,16 +2510,13 @@ OnePort 365 Commercial Team`
                     </div>
                   </div>
                 ) : (
-                  <div style={{ textAlign: "center", padding: "40px 20px" }}>
-                    <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.5 }}>📋</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text2)", marginBottom: 6 }}>No RFQ Selected</div>
-                    <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.5 }}>
-                      Select an RFQ from the inbox first, then come back here to contact partners for rate requests.
-                    </div>
+                  <div style={{ textAlign: "center", padding: "30px 20px", color: "var(--text3)", fontSize: 12 }}>
+                    Select an RFQ above to start contacting partners.
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       )}
