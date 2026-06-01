@@ -15,13 +15,14 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// On 401, clear token and reload — except on the login endpoint itself
+// On 401, clear token and reload — except on localhost (dev) or the login endpoint
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       const isLogin = error.config?.url?.includes("/auth/login");
-      if (!isLogin) {
+      const isDev = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+      if (!isLogin && !isDev) {
         localStorage.removeItem("app-token");
         window.location.reload();
       }
