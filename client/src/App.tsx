@@ -9,6 +9,7 @@ import Quotes from "./pages/Quotes";
 import SettingsPage from "./pages/SettingsPage";
 import WhatsAppInbox from "./pages/WhatsAppInbox";
 import Shipments from "./pages/Shipments";
+import BrainPage from "./pages/Brain";
 import ShipmentDetail from "./pages/ShipmentDetail";
 import CustomerProfile from "./pages/CustomerProfile";
 import api from "./lib/api";
@@ -129,6 +130,7 @@ export default function App() {
           <Route path="/shipments" element={<Shipments />} />
           <Route path="/shipments/view/:id" element={<ShipmentDetail />} />
           <Route path="/customers/:name" element={<CustomerProfile />} />
+          <Route path="/brain" element={<BrainPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </div>

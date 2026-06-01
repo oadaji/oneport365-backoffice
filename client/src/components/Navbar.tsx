@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FileText, DollarSign, Building2, Ship } from "lucide-react";
+import { FileText, DollarSign, Building2, Ship, Brain } from "lucide-react";
 import api from "../lib/api";
 
 function RfqIcon({ size = 18 }: { size?: number }) {
@@ -73,6 +73,7 @@ export default function Navbar() {
     { path: "/rates", title: "Rates", icon: DollarSign, count: null },
     { path: "/quotes", title: "Quotes", icon: FileText, count: counts.quotes },
     { path: "/shipments", title: "Shipments", icon: Ship, count: null },
+    { path: "/brain", title: "Brain", icon: Brain, count: null },
   ];
 
   return (

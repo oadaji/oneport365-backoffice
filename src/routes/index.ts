@@ -13,6 +13,7 @@ import { emailAccountsRouter } from "./email-accounts";
 import { microsoftAuthRouter } from "./microsoft-auth";
 import { googleAuthRouter } from "./google-auth";
 import { emailSyncRouter } from "./email-sync";
+import { brainRouter } from "./brain";
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use(emailAccountsRouter);
 router.use(microsoftAuthRouter);
 router.use(googleAuthRouter);
 router.use(emailSyncRouter);
+router.use(brainRouter);
 
 export default router;

@@ -1769,7 +1769,13 @@ OnePort 365 Commercial Team`
               {/* Generate Quote */}
               <button
                 className="btn btn-primary"
-                onClick={() => { setShowQuoteModal(true); setQuoteStep("rate-check"); setRateCheckStatus("checking"); setTimeout(() => setRateCheckStatus("no-rates"), 1500); }}
+                onClick={() => {
+                  setShowQuoteModal(true);
+                  setQuoteStep("rate-check");
+                  setRateCheckStatus("checking");
+                  const outreachRates = currentOutreach.filter((o: any) => o.status === "rates-received" && o.ratesReceived?.length > 0);
+                  setTimeout(() => setRateCheckStatus(outreachRates.length > 0 ? "found" : "no-rates"), 1500);
+                }}
                 disabled={generating}
                 style={{
                   width: "100%", marginTop: 16, padding: "10px 0", fontSize: 12,
@@ -1846,14 +1852,33 @@ OnePort 365 Commercial Team`
                   </div>
                 )}
 
-                {rateCheckStatus === "found" && (
+                {rateCheckStatus === "found" && (() => {
+                  const outreachWithRates = currentOutreach.filter((o: any) => o.status === "rates-received" && o.ratesReceived?.length > 0);
+                  const allRates = outreachWithRates.length > 0
+                    ? outreachWithRates.flatMap((o: any) => o.ratesReceived.map((r: any) => ({ ...r, source: o.partner })))
+                    : MOCK_RATES.map(r => ({ carrier: r.carrier, _20ft: r._20ft, _40ft: r._40ft, _40hc: r._40hc, transit: `${r.transitDays}d`, source: "Rate DB" }));
+                  return (
                   <div>
                     <button onClick={() => setRateCheckStatus("no-rates")} style={{
                       background: "none", border: "none", cursor: "pointer", color: "var(--accent)",
                       fontSize: 11, fontWeight: 500, padding: 0, marginBottom: 10, display: "flex", alignItems: "center", gap: 4,
                     }}>← Back to options</button>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Matching Rates</div>
-                    {MOCK_RATES.map((rate, i) => (
+
+                    {outreachWithRates.length > 0 && (
+                      <div style={{
+                        padding: "8px 12px", borderRadius: 6, background: "#f0fdf4",
+                        border: "1px solid #86efac", marginBottom: 12, fontSize: 11, color: "#16a34a", fontWeight: 500,
+                        display: "flex", alignItems: "center", gap: 6,
+                      }}>
+                        <span style={{ fontSize: 14 }}>✓</span>
+                        Rates received from {outreachWithRates.length} partner{outreachWithRates.length > 1 ? "s" : ""} via outreach
+                      </div>
+                    )}
+
+                    <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+                      {outreachWithRates.length > 0 ? "Partner Rates" : "Matching Rates"}
+                    </div>
+                    {allRates.map((rate: any, i: number) => (
                       <div key={i} style={{
                         display: "grid", gridTemplateColumns: "100px 1fr 1fr 1fr 80px",
                         padding: "10px 12px", marginBottom: 4, borderRadius: 6,
@@ -1861,12 +1886,22 @@ OnePort 365 Commercial Team`
                         fontSize: 12, alignItems: "center",
                       }}>
                         <span style={{ fontWeight: 600, color: "var(--text)" }}>{rate.carrier}</span>
-                        <span style={{ color: "var(--text2)" }}>20FT: <strong>${rate._20ft}</strong></span>
-                        <span style={{ color: "var(--text2)" }}>40FT: <strong>${rate._40ft}</strong></span>
-                        <span style={{ color: "var(--text2)" }}>40HC: <strong>${rate._40hc}</strong></span>
-                        <span style={{ fontSize: 10, color: "var(--text3)" }}>{rate.transitDays}d transit</span>
+                        <span style={{ color: "var(--text2)" }}>20FT: <strong>${typeof rate._20ft === "number" ? rate._20ft.toLocaleString() : rate._20ft}</strong></span>
+                        <span style={{ color: "var(--text2)" }}>40FT: <strong>${typeof rate._40ft === "number" ? rate._40ft.toLocaleString() : rate._40ft}</strong></span>
+                        <span style={{ color: "var(--text2)" }}>40HC: <strong>${typeof rate._40hc === "number" ? rate._40hc.toLocaleString() : rate._40hc}</strong></span>
+                        <span style={{ fontSize: 10, color: "var(--text3)" }}>{rate.transit}</span>
                       </div>
                     ))}
+                    {outreachWithRates.length > 0 && (
+                      <div style={{ marginTop: 6, fontSize: 10, color: "var(--text3)" }}>
+                        {allRates.map((r: any) => r.source).filter((v: string, i: number, a: string[]) => a.indexOf(v) === i).map((src: string, i: number) => (
+                          <span key={i} style={{
+                            display: "inline-block", padding: "2px 8px", borderRadius: 4, marginRight: 4,
+                            background: "var(--bg)", border: "1px solid var(--border)", fontSize: 9, fontWeight: 500,
+                          }}>via {src}</span>
+                        ))}
+                      </div>
+                    )}
                     <button
                       className="btn btn-primary"
                       onClick={() => generateQuote(selected._id)}
@@ -1876,11 +1911,16 @@ OnePort 365 Commercial Team`
                       {generating ? "Generating..." : "Generate Quote with these rates"}
                     </button>
                   </div>
-                )}
+                  );
+                })()}
 
                 {rateCheckStatus === "no-rates" && (
                   <div>
-                    <button onClick={() => { setRateCheckStatus("checking"); setTimeout(() => setRateCheckStatus("no-rates"), 800); }} style={{
+                    <button onClick={() => {
+                      setRateCheckStatus("checking");
+                      const outreachRates = currentOutreach.filter((o: any) => o.status === "rates-received" && o.ratesReceived?.length > 0);
+                      setTimeout(() => setRateCheckStatus(outreachRates.length > 0 ? "found" : "no-rates"), 800);
+                    }} style={{
                       background: "none", border: "none", cursor: "pointer", color: "var(--accent)",
                       fontSize: 11, fontWeight: 500, padding: 0, marginBottom: 10, display: "flex", alignItems: "center", gap: 4,
                     }}>← Re-check rates</button>
