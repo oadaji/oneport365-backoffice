@@ -11,7 +11,7 @@ import { extractWithClaude, preClassifyEmail } from "../lib/ai-extract";
 import { resolveContact } from "../lib/resolve-contact";
 import { extractForwardedSender } from "../lib/forwarded-sender";
 import { resolveSender } from "../lib/resolve-sender";
-import { getValidToken, refreshAccessToken } from "../lib/microsoft-oauth";
+import { getValidToken } from "../lib/microsoft-oauth";
 import { classifyEmail } from "../lib/classifier";
 import { fetchOutlookShippingEmails, deltaSync as outlookDeltaSync, GraphMessage } from "../lib/outlook-graph";
 import crypto from "crypto";
@@ -78,19 +78,18 @@ async function getAccountsToSync(): Promise<SyncAccount[]> {
     const refreshToken = syncAcc.refreshToken;
     if (acc.authType === "oauth2" && refreshToken) {
       try {
-        const token = await getValidToken({ accessToken: syncAcc.accessToken, refreshToken, tokenExpiresAt: syncAcc.tokenExpiresAt });
-        syncAcc.accessToken = token;
+        const tokenResult = await getValidToken({ accessToken: syncAcc.accessToken, refreshToken, tokenExpiresAt: syncAcc.tokenExpiresAt });
+        syncAcc.accessToken = tokenResult.accessToken;
 
-        // If token was refreshed, persist new tokens on the source account (donor for shared)
-        if (token !== syncAcc.accessToken) {
-          const refreshed = await refreshAccessToken(refreshToken);
+        // If token was refreshed, persist new refresh token + expiry
+        if (tokenResult.refreshed) {
           const updateId = acc.shared && donor ? donor._id : acc._id;
           await EmailAccount.findByIdAndUpdate(updateId, {
-            accessToken: refreshed.accessToken,
-            refreshToken: refreshed.refreshToken,
-            tokenExpiresAt: refreshed.expiresAt,
+            accessToken: tokenResult.accessToken,
+            refreshToken: tokenResult.refreshToken || refreshToken,
+            tokenExpiresAt: tokenResult.expiresAt,
           });
-          syncAcc.accessToken = refreshed.accessToken;
+          syncAcc.accessToken = tokenResult.accessToken;
         }
       } catch (err: any) {
         await EmailAccount.findByIdAndUpdate(acc._id, { lastError: `OAuth2 token refresh failed: ${err.message}` });
@@ -623,7 +622,13 @@ router.post("/gmail/send", async (req: Request, res: Response) => {
 
     if (dbAccount.authType === "oauth2" && dbAccount.refreshToken) {
       // Outlook OAuth2 SMTP
-      const token = await getValidToken(dbAccount);
+      const tokenResult = await getValidToken(dbAccount);
+      if (tokenResult.refreshed) {
+        dbAccount.accessToken = tokenResult.accessToken;
+        if (tokenResult.refreshToken) dbAccount.refreshToken = tokenResult.refreshToken;
+        if (tokenResult.expiresAt) dbAccount.tokenExpiresAt = tokenResult.expiresAt;
+        await dbAccount.save();
+      }
       transporter = nodemailer.createTransport({
         host: "smtp.office365.com",
         port: 587,
@@ -631,7 +636,7 @@ router.post("/gmail/send", async (req: Request, res: Response) => {
         auth: {
           type: "OAuth2",
           user: from,
-          accessToken: token,
+          accessToken: tokenResult.accessToken,
         },
       } as any);
     } else {

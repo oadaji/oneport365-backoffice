@@ -116,12 +116,13 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
   };
 }
 
-/** Get a valid access token for an account, refreshing if needed */
+/** Get a valid access token for an account, refreshing if needed.
+ *  Returns the full refresh result so callers can persist the new refresh token + expiry. */
 export async function getValidToken(account: {
   accessToken?: string;
   refreshToken?: string;
   tokenExpiresAt?: Date;
-}): Promise<string> {
+}): Promise<{ accessToken: string; refreshToken?: string; expiresAt?: Date; refreshed: boolean }> {
   if (!account.refreshToken) {
     throw new Error("No refresh token available — user must re-authenticate");
   }
@@ -132,10 +133,15 @@ export async function getValidToken(account: {
     account.tokenExpiresAt &&
     new Date(account.tokenExpiresAt).getTime() > Date.now() + 5 * 60 * 1000
   ) {
-    return account.accessToken;
+    return { accessToken: account.accessToken, refreshed: false };
   }
 
   // Refresh
   const refreshed = await refreshAccessToken(account.refreshToken);
-  return refreshed.accessToken;
+  return {
+    accessToken: refreshed.accessToken,
+    refreshToken: refreshed.refreshToken,
+    expiresAt: refreshed.expiresAt,
+    refreshed: true,
+  };
 }

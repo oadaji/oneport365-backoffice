@@ -211,11 +211,14 @@ router.post("/emails/sync", async (_req: Request, res: Response) => {
           if (donor) tokenAccount = donor;
         }
 
-        const accessToken = await getValidToken(tokenAccount);
+        const tokenResult = await getValidToken(tokenAccount);
+        const accessToken = tokenResult.accessToken;
 
-        // Update tokens on the donor/account if refreshed
-        if (accessToken !== tokenAccount.accessToken) {
-          tokenAccount.accessToken = accessToken;
+        // Persist new refresh token + expiry if token was refreshed
+        if (tokenResult.refreshed) {
+          tokenAccount.accessToken = tokenResult.accessToken;
+          if (tokenResult.refreshToken) tokenAccount.refreshToken = tokenResult.refreshToken;
+          if (tokenResult.expiresAt) tokenAccount.tokenExpiresAt = tokenResult.expiresAt;
           await tokenAccount.save();
         }
 

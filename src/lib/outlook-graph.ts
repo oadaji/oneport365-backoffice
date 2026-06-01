@@ -1,5 +1,18 @@
-import { getValidToken, refreshAccessToken } from "./microsoft-oauth";
+import { getValidToken } from "./microsoft-oauth";
 import { EmailAccount } from "../models/email-account";
+
+/** Get access token and persist refreshed tokens to DB */
+async function getAndPersistToken(account: any): Promise<string> {
+  const result = await getValidToken(account);
+  if (result.refreshed && account._id) {
+    await EmailAccount.findByIdAndUpdate(account._id, {
+      accessToken: result.accessToken,
+      ...(result.refreshToken && { refreshToken: result.refreshToken }),
+      ...(result.expiresAt && { tokenExpiresAt: result.expiresAt }),
+    });
+  }
+  return result.accessToken;
+}
 
 // ── Outlook shipping search (KQL) — every Graph call MUST include this ──
 export const OUTLOOK_SHIPPING_SEARCH = [
@@ -60,7 +73,7 @@ export async function fetchOutlookShippingEmails(
   opts: { maxMessages?: number; sinceDate?: Date } = {}
 ): Promise<GraphMessage[]> {
   const maxMessages = opts.maxMessages || 100;
-  const token = await getValidToken(account);
+  const token = await getAndPersistToken(account);
 
   // Determine date filter
   let dateFilter: string;
@@ -112,7 +125,7 @@ export async function fetchOutlookShippingEmails(
 export async function deltaSync(
   account: any
 ): Promise<{ messages: GraphMessage[]; newCursor: string }> {
-  const token = await getValidToken(account);
+  const token = await getAndPersistToken(account);
   const messages: GraphMessage[] = [];
 
   let url: string;
@@ -151,7 +164,7 @@ export async function getMessageBody(
   account: any,
   messageId: string
 ): Promise<string> {
-  const token = await getValidToken(account);
+  const token = await getAndPersistToken(account);
   const data = await graphFetch(
     token,
     `https://graph.microsoft.com/v1.0/me/messages/${messageId}?$select=body`
