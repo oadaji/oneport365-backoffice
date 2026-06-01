@@ -842,7 +842,7 @@ OnePort 365 Commercial Team`
   const newCount = sourceRfqs.filter(r => r.status === "info_needed" || (!r.status || r.status === "new")).length;
   const respondedCount = sourceRfqs.filter(r => r.status === "replied" || r.status === "partial").length;
   const awaitingRatesCount = sourceRfqs.filter(r => r.status === "stuck").length;
-  const quoteIssuedCount = sourceRfqs.filter(r => r.status === "ready").length;
+  const quoteReadyCount = sourceRfqs.filter(r => r.status === "ready").length;
 
   // Source counts
   const emailCount = rfqs.filter(r => (r.source || "email") === "email").length;
@@ -853,7 +853,7 @@ OnePort 365 Commercial Team`
     { key: "new", label: "New", count: newCount, color: "#2563eb", bg: "#eff4ff" },
     { key: "responded", label: "Responded", count: respondedCount, color: "#8b5cf6", bg: "#f3eeff" },
     { key: "awaiting", label: "Awaiting Rates", count: awaitingRatesCount, color: "#ea8a1a", bg: "#fef3e6" },
-    { key: "quoted", label: "Quote Issued", count: quoteIssuedCount, color: "#16a34a", bg: "#e6f7ec" },
+    { key: "quoted", label: "Quote Ready", count: quoteReadyCount, color: "#16a34a", bg: "#e6f7ec" },
   ];
 
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
