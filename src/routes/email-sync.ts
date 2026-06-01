@@ -7,6 +7,8 @@ import { extractWithClaude, preClassifyEmail } from "../lib/ai-extract";
 import { resolveContact } from "../lib/resolve-contact";
 import { extractForwardedSender } from "../lib/forwarded-sender";
 import { resolveSender } from "../lib/resolve-sender";
+import { fetchShippingEmails, deltaSyncOutlook, getInitialDeltaLink, GraphThread } from "../lib/microsoft-graph";
+import { getValidToken } from "../lib/microsoft-oauth";
 import crypto from "crypto";
 
 const router = Router();
@@ -198,9 +200,192 @@ router.post("/emails/sync", async (_req: Request, res: Response) => {
       } else if (account.provider === "gmail" && account.authType === "password") {
         // Legacy IMAP Gmail — skip, user should reconnect via OAuth
         errors.push(`${account.email}: Please reconnect via Google OAuth (app passwords no longer supported)`);
-      } else if (account.provider === "outlook") {
-        // Phase 2 — Graph API (not yet implemented)
-        errors.push(`${account.email}: Outlook Graph API sync coming soon`);
+      } else if (account.provider === "outlook" && account.authType === "oauth2") {
+        // Outlook via Microsoft Graph API
+        // For shared mailboxes, find donor account for token
+        let tokenAccount = account;
+        if (account.shared) {
+          const donor = await EmailAccount.findOne({
+            provider: "outlook", authType: "oauth2", active: true, shared: { $ne: true },
+          });
+          if (donor) tokenAccount = donor;
+        }
+
+        const accessToken = await getValidToken(tokenAccount);
+
+        // Update tokens on the donor/account if refreshed
+        if (accessToken !== tokenAccount.accessToken) {
+          tokenAccount.accessToken = accessToken;
+          await tokenAccount.save();
+        }
+
+        const mailbox = account.shared ? account.email : undefined;
+
+        let graphThreads: GraphThread[];
+
+        if (account.cursor) {
+          // Incremental delta sync
+          try {
+            const delta = await deltaSyncOutlook(accessToken, account.cursor, { mailbox });
+            graphThreads = delta.threads;
+            account.cursor = delta.newDeltaLink;
+          } catch (deltaErr: any) {
+            // Delta link expired — do full sync
+            console.warn(`[OUTLOOK] Delta sync failed for ${account.email}, doing full sync: ${deltaErr.message}`);
+            graphThreads = await fetchShippingEmails(accessToken, { mailbox, maxMessages: 200, daysBack: 60 });
+            const newDelta = await getInitialDeltaLink(accessToken, { mailbox });
+            account.cursor = newDelta;
+          }
+        } else {
+          // Initial full sync
+          graphThreads = await fetchShippingEmails(accessToken, { mailbox, maxMessages: 200, daysBack: 60 });
+          try {
+            const deltaLink = await getInitialDeltaLink(accessToken, { mailbox });
+            account.cursor = deltaLink;
+          } catch (e) {
+            console.warn(`[OUTLOOK] Could not get delta link for ${account.email}`);
+          }
+        }
+
+        // Process each thread (reuse same pipeline as Gmail)
+        for (const thread of graphThreads) {
+          try {
+            const firstMsg = thread.messages[0];
+            if (!firstMsg) continue;
+
+            // Check if already ingested
+            const uid = `outlook:${thread.conversationId}`;
+            const existingEmail = await Email.findOne({ uid });
+            if (existingEmail) { totalSkipped++; continue; }
+
+            // Combine thread text
+            const threadText = thread.messages
+              .map(m => `From: ${m.from} <${m.fromEmail}>\nDate: ${m.sentAt.toISOString()}\nSubject: ${m.subject}\n\n${m.bodyText}`)
+              .join("\n\n──────────────\n\n");
+
+            // Layer 1: Replace @oneport365.com sender
+            const resolved = extractForwardedSender(firstMsg.fromEmail, firstMsg.from, threadText);
+            const effectiveFromEmail = resolved.fromEmail;
+            const effectiveFromName = resolved.fromName;
+
+            // Pre-classify
+            const preClass = preClassifyEmail({
+              fromName: effectiveFromName,
+              fromEmail: effectiveFromEmail,
+              subject: thread.subject,
+              body: threadText.slice(0, 3000),
+            });
+
+            if (preClass && preClass !== "customer-rfq" && preClass !== "internal-rfq") {
+              totalSkipped++;
+              continue;
+            }
+
+            // Claude extraction
+            const extraction = await extractWithClaude(
+              {
+                fromName: effectiveFromName,
+                fromEmail: effectiveFromEmail,
+                subject: thread.subject,
+                body: threadText,
+              },
+              "customer-rfq"
+            );
+
+            if (extraction.status === "error") {
+              await Email.create({
+                uid,
+                fromName: effectiveFromName,
+                fromEmail: effectiveFromEmail,
+                subject: thread.subject,
+                body: threadText,
+                emailType: "unknown",
+                receivedAt: thread.lastMessageAt,
+                messageId: thread.conversationId,
+                cc: firstMsg.cc || undefined,
+                receivedInbox: account.label || account.email,
+                extractionStatus: "failed",
+                extractionError: extraction.error,
+              });
+              console.error(`[OUTLOOK] Extraction failed for "${thread.subject.slice(0, 50)}": ${extraction.error}`);
+              totalSkipped++;
+              continue;
+            }
+
+            const resolvedType = extraction.detectedEmailType || "customer-rfq";
+            if (resolvedType !== "customer-rfq" && resolvedType !== "internal-rfq") {
+              totalSkipped++;
+              continue;
+            }
+
+            // Check freight match
+            const hasRoute = extraction.shipments.some(s =>
+              s.fields.some(f => (f.k === "POL" || f.k === "POD") && f.ok)
+            );
+            if (!hasRoute) { totalSkipped++; continue; }
+
+            // CRM contact
+            const crm = await resolveContact({
+              email: effectiveFromEmail,
+              name: effectiveFromName,
+              source: "email",
+            });
+
+            // Save email
+            const emailDoc = await Email.create({
+              uid,
+              fromName: effectiveFromName,
+              fromEmail: effectiveFromEmail,
+              subject: thread.subject,
+              body: threadText,
+              emailType: resolvedType,
+              receivedAt: thread.lastMessageAt,
+              messageId: thread.conversationId,
+              cc: firstMsg.cc || undefined,
+              receivedInbox: account.label || account.email,
+              contactId: crm.contactId,
+            });
+
+            // Create RFQs
+            const isGroup = extraction.shipments.length > 1;
+            const groupId = isGroup ? crypto.randomUUID() : undefined;
+
+            for (let idx = 0; idx < extraction.shipments.length; idx++) {
+              const s = extraction.shipments[idx];
+              const sender = resolveSender(
+                { fromName: effectiveFromName, fromEmail: effectiveFromEmail, body: threadText },
+                s.fields
+              );
+              await Rfq.create({
+                emailId: emailDoc._id,
+                ref: generateRef(),
+                emailType: resolvedType,
+                status: s.status as any,
+                fields: s.fields,
+                missingFields: s.missing,
+                followUpDraft: (isGroup
+                  ? (idx === 0 ? extraction.combinedDraft : undefined)
+                  : (extraction.combinedDraft || s.draft)) || undefined,
+                groupId,
+                groupIndex: isGroup ? idx + 1 : undefined,
+                groupTotal: isGroup ? extraction.shipments.length : undefined,
+                sourceMessageId: thread.conversationId,
+                companyId: crm.companyId || undefined,
+                contactId: crm.contactId,
+                resolvedSenderName: sender.name,
+                resolvedSenderEmail: sender.email,
+              });
+            }
+
+            totalSynced++;
+          } catch (threadErr: any) {
+            console.error(`[OUTLOOK] Error processing thread ${thread.conversationId}:`, threadErr.message);
+          }
+        }
+
+        account.lastSyncedAt = new Date();
+        account.lastError = undefined;
+        await account.save();
       }
     } catch (err: any) {
       const errMsg = `${account.label || account.email}: ${err.message}`;
