@@ -9,22 +9,14 @@ const redirectUri =
   process.env.MICROSOFT_REDIRECT_URI ||
   "http://localhost:5001/api/auth/microsoft/callback";
 
-const BASE_SCOPES = [
+const SCOPES = [
   "https://graph.microsoft.com/Mail.Read",
+  "https://graph.microsoft.com/Mail.Read.Shared",
   "offline_access",
   "openid",
   "email",
   "profile",
 ];
-
-const SHARED_SCOPES = [
-  ...BASE_SCOPES,
-  "https://graph.microsoft.com/Mail.Read.Shared",
-];
-
-function getScopes(shared?: boolean): string[] {
-  return shared ? SHARED_SCOPES : BASE_SCOPES;
-}
 
 function getClient(): msal.ConfidentialClientApplication {
   return new msal.ConfidentialClientApplication({
@@ -38,10 +30,9 @@ function getClient(): msal.ConfidentialClientApplication {
 
 /** Generate the Azure AD login URL */
 export async function getAuthUrl(state?: string): Promise<string> {
-  const isShared = state === "shared";
   const client = getClient();
   return client.getAuthCodeUrl({
-    scopes: getScopes(isShared),
+    scopes: SCOPES,
     redirectUri,
     state: state || "",
     prompt: "select_account",
@@ -65,7 +56,7 @@ export async function exchangeCode(code: string): Promise<{
     code,
     redirect_uri: redirectUri,
     grant_type: "authorization_code",
-    scope: BASE_SCOPES.join(" "),
+    scope: SCOPES.join(" "),
   });
 
   const { data } = await axios.post(tokenUrl, params.toString(), {
@@ -109,7 +100,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
     client_secret: clientSecret,
     refresh_token: refreshToken,
     grant_type: "refresh_token",
-    scope: BASE_SCOPES.join(" "),
+    scope: SCOPES.join(" "),
   });
 
   const { data } = await axios.post(tokenUrl, params.toString(), {
