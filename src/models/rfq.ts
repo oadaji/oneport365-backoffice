@@ -25,6 +25,7 @@ export interface IRfq extends Document {
   sourceMessageId?: string;
   companyId?: Types.ObjectId;
   contactId?: Types.ObjectId;
+  opportunityId?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,6 +58,7 @@ const rfqSchema = new Schema<IRfq>(
     sourceMessageId: String,
     companyId: { type: Schema.Types.ObjectId, ref: "Company" },
     contactId: { type: Schema.Types.ObjectId, ref: "Contact" },
+    opportunityId: { type: Schema.Types.ObjectId, ref: "Opportunity" },
   },
   { timestamps: true }
 );

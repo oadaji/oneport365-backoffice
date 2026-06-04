@@ -7,3 +7,6 @@ export { Partner } from "./partner";
 export { OceanFreightRate, HaulageImportRate, HaulageExportRate, OtherCharge } from "./rate";
 export { Quote } from "./quote";
 export { MarketIndexSnapshot, RateBenchmark, PartnerOutreach, AppSetting } from "./market";
+export { User } from "./user";
+export { Opportunity, STAGE_PROBABILITY } from "./opportunity";
+export { Activity } from "./activity";

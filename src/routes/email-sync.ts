@@ -9,6 +9,7 @@ import { extractForwardedSender } from "../lib/forwarded-sender";
 import { resolveSender } from "../lib/resolve-sender";
 import { fetchShippingEmails, deltaSyncOutlook, getInitialDeltaLink, GraphThread } from "../lib/microsoft-graph";
 import { getValidToken } from "../lib/microsoft-oauth";
+import { createOpportunityFromRfq } from "../lib/create-opportunity";
 import crypto from "crypto";
 
 const router = Router();
@@ -128,7 +129,7 @@ async function processThread(
   for (let idx = 0; idx < extraction.shipments.length; idx++) {
     const s = extraction.shipments[idx];
     const sender = resolveSender({ fromName: effectiveFromName, fromEmail: effectiveFromEmail, body: threadText }, s.fields);
-    await Rfq.create({
+    const rfq = await Rfq.create({
       emailId: emailDoc._id,
       ref: generateRef(),
       emailType: resolvedType,
@@ -146,6 +147,15 @@ async function processThread(
       contactId: crm.contactId,
       resolvedSenderName: sender.name,
       resolvedSenderEmail: sender.email,
+    });
+
+    // Auto-create opportunity from customer RFQs
+    await createOpportunityFromRfq({
+      rfqId: rfq._id,
+      companyId: crm.companyId,
+      contactId: crm.contactId,
+      fields: s.fields,
+      emailType: resolvedType,
     });
   }
 

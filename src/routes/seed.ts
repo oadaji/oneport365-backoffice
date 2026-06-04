@@ -7,18 +7,20 @@ import { Quote } from "../models/quote";
 import { Partner } from "../models/partner";
 import { OceanFreightRate, HaulageImportRate, HaulageExportRate, OtherCharge } from "../models/rate";
 import { RateBenchmark } from "../models/market";
+import { User } from "../models/user";
 
 const router = Router();
 
 // POST /api/clear — wipe all synced data (CRM, emails, RFQs, quotes)
 router.post("/clear", async (_req: Request, res: Response) => {
   try {
-    const [companies, contacts, emails, rfqs, quotes] = await Promise.all([
+    const [companies, contacts, emails, rfqs, quotes, users] = await Promise.all([
       Company.deleteMany({}),
       Contact.deleteMany({}),
       Email.deleteMany({}),
       Rfq.deleteMany({}),
       Quote.deleteMany({}),
+      User.deleteMany({}),
     ]);
     res.json({
       cleared: {
@@ -27,6 +29,7 @@ router.post("/clear", async (_req: Request, res: Response) => {
         emails: emails.deletedCount,
         rfqs: rfqs.deletedCount,
         quotes: quotes.deletedCount,
+        users: users.deletedCount,
       },
     });
   } catch (err) {
@@ -36,6 +39,17 @@ router.post("/clear", async (_req: Request, res: Response) => {
 
 router.post("/seed", async (_req: Request, res: Response) => {
   try {
+    // ── Users (Team Members) ──────────────────────────────────────────────
+    const users = await User.insertMany([
+      { name: "Tola Adeyemi", email: "tola@oneport365.com", role: "sales" },
+      { name: "Chinedu Nwosu", email: "chinedu@oneport365.com", role: "sales" },
+      { name: "Bolu Adeyemi", email: "bolu@oneport365.com", role: "sales" },
+      { name: "Femi Ogunlade", email: "femi@oneport365.com", role: "ops" },
+      { name: "Ngozi Eze", email: "ngozi@oneport365.com", role: "ops" },
+      { name: "Adaeze Okoro", email: "adaeze@oneport365.com", role: "finance" },
+      { name: "Okechukwu Anieto", email: "okechukwu@oneport365.com", role: "admin" },
+    ]);
+
     // ── Companies ──────────────────────────────────────────────
     const companies = await Company.insertMany([
       { name: "Tamrose Procurement", domain: "tamrose.com", industry: "Mining", country: "Netherlands", status: "active", tradeCorridors: ["Europe-Nigeria"], cargoTypes: ["FCL"] },

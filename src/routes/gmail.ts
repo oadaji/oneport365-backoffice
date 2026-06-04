@@ -14,6 +14,7 @@ import { resolveSender } from "../lib/resolve-sender";
 import { getValidToken } from "../lib/microsoft-oauth";
 import { classifyEmail } from "../lib/classifier";
 import { fetchOutlookShippingEmails, deltaSync as outlookDeltaSync, GraphMessage } from "../lib/outlook-graph";
+import { createOpportunityFromRfq } from "../lib/create-opportunity";
 import crypto from "crypto";
 
 const router = Router();
@@ -248,7 +249,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
             for (let idx = 0; idx < extraction.shipments.length; idx++) {
               const s = extraction.shipments[idx];
               const sender = resolveSender({ fromName, fromEmail, body }, s.fields);
-              await Rfq.create({
+              const rfq = await Rfq.create({
                 emailId: emailDoc._id,
                 ref: generateRef(),
                 emailType: resolvedType,
@@ -264,6 +265,15 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
                 contactId: crm.contactId,
                 resolvedSenderName: sender.name,
                 resolvedSenderEmail: sender.email,
+              });
+
+              // Auto-create opportunity from customer RFQs
+              await createOpportunityFromRfq({
+                rfqId: rfq._id,
+                companyId: crm.companyId,
+                contactId: crm.contactId,
+                fields: s.fields,
+                emailType: resolvedType,
               });
             }
 
@@ -541,7 +551,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
             for (let idx = 0; idx < extraction.shipments.length; idx++) {
               const s = extraction.shipments[idx];
               const sender = resolveSender({ fromName, fromEmail, body: typeof body === "string" ? body : "" }, s.fields);
-              await Rfq.create({
+              const rfq = await Rfq.create({
                 emailId: emailDoc._id,
                 ref: generateRef(),
                 emailType: resolvedType,
@@ -557,6 +567,15 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
                 contactId: crm.contactId,
                 resolvedSenderName: sender.name,
                 resolvedSenderEmail: sender.email,
+              });
+
+              // Auto-create opportunity from customer RFQs
+              await createOpportunityFromRfq({
+                rfqId: rfq._id,
+                companyId: crm.companyId,
+                contactId: crm.contactId,
+                fields: s.fields,
+                emailType: resolvedType,
               });
             }
 

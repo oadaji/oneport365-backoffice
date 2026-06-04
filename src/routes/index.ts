@@ -14,6 +14,9 @@ import { microsoftAuthRouter } from "./microsoft-auth";
 import { googleAuthRouter } from "./google-auth";
 import { emailSyncRouter } from "./email-sync";
 import { brainRouter } from "./brain";
+import { usersRouter } from "./users";
+import { opportunitiesRouter } from "./opportunities";
+import { activitiesRouter } from "./activities";
 
 const router = Router();
 
@@ -32,5 +35,8 @@ router.use(microsoftAuthRouter);
 router.use(googleAuthRouter);
 router.use(emailSyncRouter);
 router.use(brainRouter);
+router.use(usersRouter);
+router.use(opportunitiesRouter);
+router.use(activitiesRouter);
 
 export default router;
