@@ -13,7 +13,7 @@ import { extractForwardedSender } from "../lib/forwarded-sender";
 import { resolveSender } from "../lib/resolve-sender";
 import { getValidToken } from "../lib/microsoft-oauth";
 import { classifyEmail } from "../lib/classifier";
-import { fetchOutlookShippingEmails, deltaSync as outlookDeltaSync, GraphMessage } from "../lib/outlook-graph";
+// Graph API imports removed — now using IMAP for all accounts including Outlook OAuth2
 import { createOpportunityFromRfq } from "../lib/create-opportunity";
 import crypto from "crypto";
 
@@ -156,146 +156,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
       // Clear error at start (lastSyncedAt is updated only after successful sync)
       await EmailAccount.findByIdAndUpdate(account.id, { lastError: null });
 
-      // ── Outlook Graph API sync ──
-      if (account.authType === "oauth2" && account.provider === "outlook") {
-        const dbAccount = await EmailAccount.findById(account.id);
-        if (!dbAccount?.refreshToken) { errors.push(`${account.email}: No refresh token`); continue; }
-
-        const graphMessages = await fetchOutlookShippingEmails(dbAccount, { maxMessages: 100 });
-
-        for (const gMsg of graphMessages) {
-          try {
-            const rawOlkFromEmail = gMsg.from?.emailAddress?.address?.toLowerCase() || "";
-            const rawOlkFromName = gMsg.from?.emailAddress?.name || rawOlkFromEmail;
-            const subject = gMsg.subject || "(no subject)";
-            let body = gMsg.body?.content || gMsg.bodyPreview || "";
-            if (gMsg.body?.contentType === "html") {
-              body = body.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
-            }
-            if (body.length > 15000) body = body.slice(0, 15000);
-
-            // Layer 1: Replace @oneport365.com sender with forwarded external sender
-            const { fromEmail, fromName } = extractForwardedSender(rawOlkFromEmail, rawOlkFromName, body);
-
-            const uid = `graph:${gMsg.id}`;
-            const cc = gMsg.ccRecipients?.map((r: any) => r.emailAddress.address).join(", ") || undefined;
-
-            // Skip automated
-            if (isAutomatedEmail({ fromEmail, subject, hasListUnsubscribe: false })) {
-              totalSkipped++;
-              continue;
-            }
-
-            // Stage 2: Local classifier
-            const outlookClassification = classifyEmail({ fromEmail, subject, body });
-            if (!outlookClassification.shippingRelevant && !outlookClassification.needsClaude) {
-              totalSkipped++;
-              continue;
-            }
-
-            // Already ingested?
-            const existing = await Email.findOne({ uid });
-            if (existing) { totalSkipped++; continue; }
-
-            // Claude extraction
-            const extraction = await extractWithClaude(
-              { fromName, fromEmail, subject, body },
-              "customer-rfq"
-            );
-
-            if (extraction.status === "error") {
-              // Save the email so it can be retried later
-              await Email.create({
-                uid, fromName, fromEmail, subject, body,
-                emailType: "unknown",
-                receivedAt: new Date(gMsg.receivedDateTime),
-                messageId: gMsg.id,
-                cc: cc || undefined,
-                receivedInbox: account.label || account.email,
-                extractionStatus: "failed",
-                extractionError: extraction.error,
-              });
-              console.error(`Extraction failed for "${subject.slice(0, 50)}": ${extraction.errorType} — ${extraction.error}`);
-              totalSkipped++;
-              continue;
-            }
-
-            const resolvedType = extraction.detectedEmailType || "irrelevant";
-            if (resolvedType !== "customer-rfq" && resolvedType !== "internal-rfq" && resolvedType !== "rate-reply") {
-              totalSkipped++;
-              continue;
-            }
-            if (!extraction.shipments || extraction.shipments.length === 0) {
-              totalSkipped++;
-              continue;
-            }
-
-            // Create CRM contact + email + RFQs
-            const crm = await resolveContact({ email: fromEmail, name: fromName, source: "email" });
-
-            const emailDoc = await Email.create({
-              uid, fromName, fromEmail, subject,
-              body, emailType: resolvedType,
-              receivedAt: new Date(gMsg.receivedDateTime),
-              messageId: gMsg.id,
-              cc: cc || undefined,
-              receivedInbox: account.label || account.email,
-              contactId: crm.contactId,
-            });
-
-            const isGroup = extraction.shipments.length > 1;
-            const groupId = isGroup ? crypto.randomUUID() : undefined;
-
-            for (let idx = 0; idx < extraction.shipments.length; idx++) {
-              const s = extraction.shipments[idx];
-              const sender = resolveSender({ fromName, fromEmail, body }, s.fields);
-              const rfq = await Rfq.create({
-                emailId: emailDoc._id,
-                ref: generateRef(),
-                emailType: resolvedType,
-                status: s.status as any,
-                fields: s.fields,
-                missingFields: s.missing,
-                followUpDraft: (isGroup ? (idx === 0 ? extraction.combinedDraft : undefined) : (extraction.combinedDraft || s.draft)) || undefined,
-                groupId,
-                groupIndex: isGroup ? idx + 1 : undefined,
-                groupTotal: isGroup ? extraction.shipments.length : undefined,
-                sourceMessageId: gMsg.id,
-                companyId: crm.companyId || undefined,
-                contactId: crm.contactId,
-                resolvedSenderName: sender.name,
-                resolvedSenderEmail: sender.email,
-              });
-
-              // Auto-create opportunity from customer RFQs
-              await createOpportunityFromRfq({
-                rfqId: rfq._id,
-                companyId: crm.companyId,
-                contactId: crm.contactId,
-                fields: s.fields,
-                emailType: resolvedType,
-              });
-            }
-
-            totalSynced++;
-          } catch (msgErr) {
-            console.error("Error processing Outlook message:", msgErr);
-          }
-        }
-
-        // Update cursor for delta sync
-        try {
-          const delta = await outlookDeltaSync(dbAccount);
-          if (delta.newCursor) {
-            await EmailAccount.findByIdAndUpdate(account.id, { cursor: delta.newCursor });
-          }
-        } catch { /* delta cursor save is best-effort */ }
-
-        await EmailAccount.findByIdAndUpdate(account.id, { lastSyncedAt: new Date(), lastError: null });
-        continue; // Skip IMAP processing
-      }
-
-      // ── Gmail IMAP sync ──
+      // ── IMAP sync (Gmail + Outlook OAuth2) ──
       const client = createImapClient(account);
 
       client.on("error", () => {});

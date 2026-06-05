@@ -9,10 +9,9 @@ const redirectUri =
   process.env.MICROSOFT_REDIRECT_URI ||
   "http://localhost:5001/api/auth/microsoft/callback";
 
-// Graph API scopes for reading mail (personal + shared mailboxes)
+// IMAP scope for mailbox access (works with shared mailboxes via delegation)
 const SCOPES = [
-  "https://graph.microsoft.com/Mail.Read",
-  "https://graph.microsoft.com/Mail.Read.Shared",
+  "https://outlook.office.com/IMAP.AccessAsUser.All",
   "offline_access",
   "openid",
   "email",
