@@ -357,7 +357,28 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
             // the original content is often only in HTML — strip tags and use it.
             let body = parsed.text || "";
             if (parsed.html) {
-              const strippedHtml = parsed.html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+              let strippedHtml = parsed.html
+                // Remove style tags and their content
+                .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+                // Remove script tags and their content
+                .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+                // Remove HTML comments
+                .replace(/<!--[\s\S]*?-->/g, " ")
+                // Remove all remaining HTML tags
+                .replace(/<[^>]+>/g, " ")
+                // Decode common HTML entities
+                .replace(/&nbsp;/g, " ")
+                .replace(/&lt;/g, "<")
+                .replace(/&gt;/g, ">")
+                .replace(/&amp;/g, "&")
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'")
+                .replace(/&apos;/g, "'")
+                // Remove Outlook image placeholders like <Outlook-xyz.png>
+                .replace(/<[^>]*\.(png|gif|jpg|jpeg)[^>]*>/gi, " ")
+                // Collapse whitespace
+                .replace(/\s+/g, " ")
+                .trim();
               // Use HTML version if it has significantly more content
               if (strippedHtml.length > body.length * 1.5) body = strippedHtml;
             }
