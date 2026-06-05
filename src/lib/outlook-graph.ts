@@ -108,8 +108,13 @@ export async function fetchOutlookShippingEmails(
   const messages: GraphMessage[] = [];
   const select = "id,conversationId,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,hasAttachments,body";
 
+  // Use /users/{email} for shared mailboxes, /me for personal
+  const basePath = account.shared
+    ? `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(account.email)}/mailFolders/inbox/messages`
+    : `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages`;
+
   // $search and $orderby are mutually exclusive in Graph — that's fine, relevance order is OK
-  let url = `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$search="${encodeURIComponent(OUTLOOK_SHIPPING_SEARCH)}"&$filter=${encodeURIComponent(dateFilter)}&$top=50&$select=${select}`;
+  let url = `${basePath}?$search="${encodeURIComponent(OUTLOOK_SHIPPING_SEARCH)}"&$filter=${encodeURIComponent(dateFilter)}&$top=50&$select=${select}`;
 
   while (messages.length < maxMessages && url) {
     try {
@@ -125,7 +130,7 @@ export async function fetchOutlookShippingEmails(
       // $search + $filter might fail on some tenants — fall back to $filter only
       if (err.message.includes("400") && url.includes("$search")) {
         console.warn("Graph $search+$filter failed, falling back to $filter only");
-        url = `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$filter=${encodeURIComponent(dateFilter)}&$top=50&$select=${select}&$orderby=receivedDateTime desc`;
+        url = `${basePath}?$filter=${encodeURIComponent(dateFilter)}&$top=50&$select=${select}&$orderby=receivedDateTime desc`;
         continue;
       }
       throw err;

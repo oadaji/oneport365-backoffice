@@ -9,9 +9,10 @@ const redirectUri =
   process.env.MICROSOFT_REDIRECT_URI ||
   "http://localhost:5001/api/auth/microsoft/callback";
 
-// Use IMAP scope (already configured in Azure AD) instead of Graph API Mail.Read
+// Graph API scopes for reading mail (personal + shared mailboxes)
 const SCOPES = [
-  "https://outlook.office.com/IMAP.AccessAsUser.All",
+  "https://graph.microsoft.com/Mail.Read",
+  "https://graph.microsoft.com/Mail.Read.Shared",
   "offline_access",
   "openid",
   "email",
