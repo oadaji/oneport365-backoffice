@@ -158,7 +158,24 @@ FIELD RULES:
 FOLLOW-UP DRAFT: If fields missing, generate a warm, professional email under 120 words from "Commercial Team · OnePort 365" asking for missing info. Address the customer by name. Use a numbered list for missing items. For multi-shipment, label sections per shipment.`;
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/<[^>]*\.(png|gif|jpg|jpeg)[^>]*>/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function classifyError(err: any): MultiExtractionError["errorType"] {
