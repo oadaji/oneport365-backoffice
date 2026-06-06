@@ -17,6 +17,7 @@ import { brainRouter } from "./brain";
 import { usersRouter } from "./users";
 import { opportunitiesRouter } from "./opportunities";
 import { activitiesRouter } from "./activities";
+import { marketRouter } from "./market";
 
 const router = Router();
 
@@ -38,5 +39,6 @@ router.use(brainRouter);
 router.use(usersRouter);
 router.use(opportunitiesRouter);
 router.use(activitiesRouter);
+router.use(marketRouter);
 
 export default router;

@@ -12,6 +12,8 @@ import Shipments from "./pages/Shipments";
 import BrainPage from "./pages/Brain";
 import ShipmentDetail from "./pages/ShipmentDetail";
 import CustomerProfile from "./pages/CustomerProfile";
+import CompanyProfile from "./pages/CompanyProfile";
+import Market from "./pages/Market";
 import api from "./lib/api";
 
 function LoginScreen() {
@@ -125,12 +127,14 @@ export default function App() {
           <Route path="/" element={<RfqInbox />} />
           <Route path="/whatsapp" element={<WhatsAppInbox />} />
           <Route path="/crm" element={<CRM />} />
+          <Route path="/crm/companies/:id" element={<CompanyProfile />} />
           <Route path="/rates" element={<Rates />} />
           <Route path="/quotes" element={<Quotes />} />
           <Route path="/shipments" element={<Shipments />} />
           <Route path="/shipments/view/:id" element={<ShipmentDetail />} />
           <Route path="/customers/:name" element={<CustomerProfile />} />
           <Route path="/brain" element={<BrainPage />} />
+          <Route path="/market" element={<Market />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </div>
