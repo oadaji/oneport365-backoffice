@@ -21,6 +21,13 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     return;
   }
 
+  // Skip auth on localhost for dev convenience
+  const host = req.hostname || req.get("host") || "";
+  if (host === "localhost" || host.startsWith("localhost:") || host === "127.0.0.1") {
+    next();
+    return;
+  }
+
   // Allow health check without auth (Railway needs this)
   if (req.path === "/api/health" || req.path === "/api/health/claude") {
     next();
