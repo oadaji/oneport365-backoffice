@@ -256,6 +256,10 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
             // Truncate to 15000 chars to match extraction limit
             if (typeof body === "string" && body.length > 15000) body = body.slice(0, 15000);
 
+            // Store original HTML for display (sanitized, max 50KB)
+            let bodyHtml = parsed.html || "";
+            if (bodyHtml.length > 50000) bodyHtml = bodyHtml.slice(0, 50000);
+
             // Layer 1: Replace @oneport365.com sender with forwarded external sender
             const { fromEmail, fromName } = extractForwardedSender(rawFromEmail, rawFromName, body);
 
@@ -305,6 +309,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
                     fromEmail,
                     subject,
                     body: typeof body === "string" ? body : "",
+                    bodyHtml,
                     emailType: "customer-rfq",
                     receivedAt: parsed.date || new Date(),
                     messageId,
@@ -354,6 +359,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
                   await Email.create({
                     uid, fromName, fromEmail, subject,
                     body: typeof body === "string" ? body : "",
+                    bodyHtml,
                     emailType: "customer-rfq",
                     receivedAt: parsed.date || new Date(),
                     messageId, inReplyTo, parentEmailId: matchEmail._id,
@@ -393,6 +399,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
               await Email.create({
                 uid, fromName, fromEmail, subject,
                 body: typeof body === "string" ? body : "",
+                bodyHtml,
                 emailType: "unknown",
                 receivedAt: parsed.date || new Date(),
                 messageId, cc,
@@ -429,6 +436,7 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
             const emailDoc = await Email.create({
               uid, fromName, fromEmail, subject,
               body: typeof body === "string" ? body : "",
+              bodyHtml,
               emailType: resolvedType,
               receivedAt: parsed.date || new Date(),
               messageId, cc,

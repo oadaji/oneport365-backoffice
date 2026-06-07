@@ -15,7 +15,7 @@ interface Rfq {
   notes?: string;
   resolvedSenderName?: string;
   resolvedSenderEmail?: string;
-  email?: { fromName: string; fromEmail: string; subject: string; body: string; receivedAt: string; receivedInbox?: string };
+  email?: { fromName: string; fromEmail: string; subject: string; body: string; bodyHtml?: string; receivedAt: string; receivedInbox?: string };
   company?: { _id: string; name: string };
   contact?: { _id: string; firstName: string; lastName?: string; email?: string };
   createdAt: string;
@@ -1335,9 +1335,18 @@ OnePort 365 Commercial Team`
               )}
 
               {/* Original email body */}
-              <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.7, whiteSpace: "pre-wrap", maxWidth: 700 }}>
-                {selected.email?.body || "No email body available."}
-              </div>
+              {selected.email?.bodyHtml ? (
+                <iframe
+                  srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;line-height:1.6;color:#1a2e1a;margin:0;padding:0;}a{color:#3b82f6;}img{max-width:100%;height:auto;}</style></head><body>${selected.email.bodyHtml}</body></html>`}
+                  style={{ width: "100%", minHeight: 400, border: "none", background: "#fff" }}
+                  sandbox="allow-same-origin"
+                  title="Email content"
+                />
+              ) : (
+                <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.7, whiteSpace: "pre-wrap", maxWidth: 700 }}>
+                  {selected.email?.body || "No email body available."}
+                </div>
+              )}
             </div>
 
             {/* Reply compose tray */}

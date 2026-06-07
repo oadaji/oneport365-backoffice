@@ -6,6 +6,7 @@ export interface IEmail extends Document {
   fromEmail: string;
   subject: string;
   body: string;
+  bodyHtml?: string;
   receivedAt: Date;
   emailType: string;
   messageId?: string;
@@ -28,6 +29,7 @@ const emailSchema = new Schema<IEmail>(
     fromEmail: { type: String, required: true },
     subject: { type: String, required: true },
     body: { type: String, required: true },
+    bodyHtml: { type: String },
     receivedAt: { type: Date, default: Date.now },
     emailType: { type: String, default: "customer-rfq" },
     messageId: String,
