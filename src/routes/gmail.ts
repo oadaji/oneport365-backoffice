@@ -227,15 +227,25 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
                 .replace(/<!--[\s\S]*?-->/g, " ")
                 // Remove all remaining HTML tags
                 .replace(/<[^>]+>/g, " ")
-                // Decode common HTML entities
-                .replace(/&nbsp;/g, " ")
-                .replace(/&lt;/g, "<")
-                .replace(/&gt;/g, ">")
-                .replace(/&amp;/g, "&")
-                .replace(/&quot;/g, '"')
-                .replace(/&#39;/g, "'")
-                .replace(/&apos;/g, "'")
-                // Remove Outlook image placeholders like <Outlook-xyz.png>
+                // Remove CSS rules that leak into text (e.g., "P {margin-top:0;...}")
+                .replace(/[A-Z]{1,10}\s*\{[^}]*\}/g, " ")
+                // First pass: decode HTML entities
+                .replace(/&nbsp;/gi, " ")
+                .replace(/&lt;/gi, "<")
+                .replace(/&gt;/gi, ">")
+                .replace(/&amp;/gi, "&")
+                .replace(/&quot;/gi, '"')
+                .replace(/&#39;/gi, "'")
+                .replace(/&apos;/gi, "'")
+                .replace(/&#x27;/gi, "'")
+                .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
+                // Second pass for double-encoded entities (e.g., &amp;lt; -> < )
+                .replace(/&lt;/gi, "<")
+                .replace(/&gt;/gi, ">")
+                .replace(/&amp;/gi, "&")
+                // Remove angle brackets around email addresses for cleaner display
+                .replace(/<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/g, "[$1]")
+                // Remove Outlook image placeholders
                 .replace(/<[^>]*\.(png|gif|jpg|jpeg)[^>]*>/gi, " ")
                 // Collapse whitespace
                 .replace(/\s+/g, " ")
