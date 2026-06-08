@@ -28,8 +28,10 @@ router.get("/rfqs", async (_req: Request, res: Response) => {
 
     // Sort by email receivedAt date (newest first), fallback to createdAt
     result.sort((a, b) => {
-      const dateA = a.email?.receivedAt ? new Date(a.email.receivedAt).getTime() : new Date(a.createdAt).getTime();
-      const dateB = b.email?.receivedAt ? new Date(b.email.receivedAt).getTime() : new Date(b.createdAt).getTime();
+      const emailA = a.email as any;
+      const emailB = b.email as any;
+      const dateA = emailA?.receivedAt ? new Date(emailA.receivedAt).getTime() : new Date(a.createdAt).getTime();
+      const dateB = emailB?.receivedAt ? new Date(emailB.receivedAt).getTime() : new Date(b.createdAt).getTime();
       return dateB - dateA;
     });
 
