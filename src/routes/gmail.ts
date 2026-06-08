@@ -527,6 +527,130 @@ router.get("/gmail/status", async (_req: Request, res: Response) => {
   res.json(results);
 });
 
+// POST /api/gmail/retry-failed — re-process emails that failed extraction
+// Processes 1 per second to avoid rate limits
+router.post("/gmail/retry-failed", async (req: Request, res: Response) => {
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const delayMs = parseInt(req.query.delay as string) || 1500; // 1.5 seconds between calls
+
+  // Find failed emails
+  const failedEmails = await Email.find({ extractionStatus: "failed" })
+    .sort({ receivedAt: -1 })
+    .limit(limit);
+
+  if (failedEmails.length === 0) {
+    res.json({ message: "No failed emails to retry", processed: 0, succeeded: 0, failed: 0 });
+    return;
+  }
+
+  let succeeded = 0;
+  let failed = 0;
+  const results: { subject: string; status: string; error?: string }[] = [];
+
+  for (const email of failedEmails) {
+    try {
+      // Extract with Claude
+      const extraction = await extractWithClaude(
+        { fromName: email.fromName, fromEmail: email.fromEmail, subject: email.subject, body: email.body },
+        "customer-rfq"
+      );
+
+      if (extraction.status === "error") {
+        failed++;
+        results.push({ subject: email.subject.substring(0, 50), status: "failed", error: extraction.error });
+        await Email.findByIdAndUpdate(email._id, { extractionError: extraction.error });
+        // Wait before next call
+        await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+
+      // Skip non-RFQ emails
+      const resolvedType = extraction.shipments[0]?.emailType || "unknown";
+      if (!["customer-rfq", "internal-rfq"].includes(resolvedType)) {
+        await Email.findByIdAndUpdate(email._id, {
+          emailType: resolvedType,
+          extractionStatus: "ok",
+          extractionError: null
+        });
+        succeeded++;
+        results.push({ subject: email.subject.substring(0, 50), status: "ok-skipped", error: `Type: ${resolvedType}` });
+        await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+
+      // Create CRM contact
+      const crm = await resolveContact({
+        email: email.fromEmail,
+        name: email.fromName,
+        source: "email",
+      });
+
+      // Update email
+      await Email.findByIdAndUpdate(email._id, {
+        emailType: resolvedType,
+        extractionStatus: "ok",
+        extractionError: null,
+        contactId: crm.contactId
+      });
+
+      // Create RFQs
+      const isGroup = extraction.shipments.length > 1;
+      const groupId = isGroup ? crypto.randomUUID() : undefined;
+
+      for (let idx = 0; idx < extraction.shipments.length; idx++) {
+        const s = extraction.shipments[idx];
+        const sender = resolveSender({ fromName: email.fromName, fromEmail: email.fromEmail, body: email.body }, s.fields);
+
+        // Check if RFQ already exists for this email
+        const existingRfq = await Rfq.findOne({ emailId: email._id });
+        if (existingRfq) continue;
+
+        const rfq = await Rfq.create({
+          emailId: email._id,
+          ref: `RFQ-${String(new Date().getFullYear()).slice(2)}${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
+          emailType: resolvedType,
+          status: s.status as any,
+          fields: s.fields,
+          missingFields: s.missing,
+          followUpDraft: (isGroup ? (idx === 0 ? extraction.combinedDraft : undefined) : (extraction.combinedDraft || s.draft)) || undefined,
+          groupId,
+          groupIndex: isGroup ? idx + 1 : undefined,
+          groupTotal: isGroup ? extraction.shipments.length : undefined,
+          companyId: crm.companyId || undefined,
+          contactId: crm.contactId,
+          resolvedSenderName: sender.name,
+          resolvedSenderEmail: sender.email,
+        });
+
+        await createOpportunityFromRfq({
+          rfqId: rfq._id,
+          companyId: crm.companyId,
+          contactId: crm.contactId,
+          fields: s.fields,
+          emailType: resolvedType,
+        });
+      }
+
+      succeeded++;
+      results.push({ subject: email.subject.substring(0, 50), status: "ok" });
+    } catch (err: any) {
+      failed++;
+      results.push({ subject: email.subject.substring(0, 50), status: "error", error: err.message });
+    }
+
+    // Wait before next call to avoid rate limits
+    await new Promise(r => setTimeout(r, delayMs));
+  }
+
+  res.json({
+    message: `Processed ${failedEmails.length} emails`,
+    processed: failedEmails.length,
+    succeeded,
+    failed,
+    results
+  });
+});
+
 // POST /api/gmail/send — send email via SMTP (Gmail or Outlook OAuth2)
 router.post("/gmail/send", async (req: Request, res: Response) => {
   try {
