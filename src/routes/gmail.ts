@@ -129,9 +129,11 @@ function createImapClient(account: SyncAccount): ImapFlow {
 }
 
 // POST /api/gmail/sync — sync all configured inboxes
+// ?full=true — resync last 60 days (useful for initial setup or catching missed emails)
 router.post("/gmail/sync", async (req: Request, res: Response) => {
   const maxResults = 500;
   const force = req.query.force === "true";
+  const fullSync = req.query.full === "true";
 
   // Force resync: clear existing emails/RFQs and reset lastSyncedAt so UIDs are re-processed
   if (force) {
@@ -168,14 +170,17 @@ router.post("/gmail/sync", async (req: Request, res: Response) => {
       const lock = await client.getMailboxLock("INBOX");
       try {
         // IMAP SEARCH — server-side filter for shipping emails only
-        // First sync: go back 30 days. Subsequent syncs: only since last sync.
+        // First sync or full=true: go back 60 days. Subsequent syncs: only since last sync.
         let sinceDate: Date;
-        if (freshAccount?.lastSyncedAt) {
+        if (fullSync) {
+          // Full sync requested — go back 60 days
+          sinceDate = new Date(Date.now() - 60 * 86400_000);
+        } else if (freshAccount?.lastSyncedAt) {
           // Subsequent sync — only fetch emails since last sync (with 1 hour buffer)
           sinceDate = new Date(new Date(freshAccount.lastSyncedAt).getTime() - 3600_000);
         } else {
-          // First sync — go back 30 days
-          sinceDate = new Date(Date.now() - 30 * 86400_000);
+          // First sync — go back 60 days
+          sinceDate = new Date(Date.now() - 60 * 86400_000);
         }
 
         const shippingKeywords = [

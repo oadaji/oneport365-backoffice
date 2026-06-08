@@ -17,8 +17,7 @@ router.get("/rfqs", async (_req: Request, res: Response) => {
     const rfqs = await Rfq.find({ status: { $ne: "archived" } })
       .populate("emailId")
       .populate("companyId", "name")
-      .populate("contactId", "firstName lastName email")
-      .sort({ createdAt: -1 });
+      .populate("contactId", "firstName lastName email");
 
     const result = rfqs.map((r) => ({
       ...r.toObject(),
@@ -26,6 +25,13 @@ router.get("/rfqs", async (_req: Request, res: Response) => {
       company: r.companyId,
       contact: r.contactId,
     }));
+
+    // Sort by email receivedAt date (newest first), fallback to createdAt
+    result.sort((a, b) => {
+      const dateA = a.email?.receivedAt ? new Date(a.email.receivedAt).getTime() : new Date(a.createdAt).getTime();
+      const dateB = b.email?.receivedAt ? new Date(b.email.receivedAt).getTime() : new Date(b.createdAt).getTime();
+      return dateB - dateA;
+    });
 
     res.json(result);
   } catch (err) {
