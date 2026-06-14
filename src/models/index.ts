@@ -10,3 +10,5 @@ export { MarketIndexSnapshot, RateBenchmark, PartnerOutreach, AppSetting } from 
 export { User } from "./user";
 export { Opportunity, STAGE_PROBABILITY } from "./opportunity";
 export { Activity } from "./activity";
+export { CanonicalRate } from "./canonical-rate";
+export { Carrier, Port, ContainerType, ChargeCode } from "./reference-data";

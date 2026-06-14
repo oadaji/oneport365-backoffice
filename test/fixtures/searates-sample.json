@@ -1,0 +1,138 @@
+{
+  "success": true,
+  "data": {
+    "quotes": [
+      {
+        "id": "sr-12345",
+        "carrier": {
+          "name": "Maersk Line",
+          "scac": "MAEU",
+          "logo": "https://example.com/maersk.png"
+        },
+        "origin": {
+          "port": "Shanghai",
+          "country": "CN",
+          "locode": "CNSHA"
+        },
+        "destination": {
+          "port": "Apapa",
+          "country": "NG",
+          "locode": "NGAPP"
+        },
+        "container_type": "40HC",
+        "charges": [
+          {
+            "name": "Ocean Freight",
+            "code": "OFR",
+            "amount": 2500,
+            "currency": "USD",
+            "basis": "PER_CONTAINER"
+          },
+          {
+            "name": "Terminal Handling - Origin",
+            "code": "THC",
+            "amount": 150,
+            "currency": "USD",
+            "basis": "PER_CONTAINER"
+          },
+          {
+            "name": "Documentation Fee",
+            "code": "DOC",
+            "amount": 75,
+            "currency": "USD",
+            "basis": "PER_BL"
+          },
+          {
+            "name": "Bunker Adjustment Factor",
+            "code": "BAF",
+            "amount": 350,
+            "currency": "USD",
+            "basis": "PER_CONTAINER"
+          }
+        ],
+        "transit_time": 35,
+        "valid_from": "2025-01-01",
+        "valid_to": "2025-03-31",
+        "service_name": "Asia-West Africa Express",
+        "transshipment_ports": ["SGSIN"]
+      },
+      {
+        "id": "sr-12346",
+        "carrier": {
+          "name": "MSC",
+          "scac": "MSCU"
+        },
+        "origin": {
+          "port": "Shanghai",
+          "country": "CN",
+          "locode": "CNSHA"
+        },
+        "destination": {
+          "port": "Apapa",
+          "country": "NG",
+          "locode": "NGAPP"
+        },
+        "container_type": "40HC",
+        "charges": [
+          {
+            "name": "Ocean Freight",
+            "amount": 2350,
+            "currency": "USD",
+            "basis": "PER_CONTAINER"
+          },
+          {
+            "name": "THC Origin",
+            "amount": 180,
+            "currency": "USD",
+            "basis": "PER_CONTAINER"
+          }
+        ],
+        "transit_time": 42,
+        "valid_from": "2025-01-15",
+        "valid_to": "2025-04-15"
+      },
+      {
+        "id": "sr-12347",
+        "carrier": {
+          "name": "CMA CGM",
+          "scac": "CMDU"
+        },
+        "origin": {
+          "port": "Ningbo",
+          "country": "CN",
+          "locode": "CNNGB"
+        },
+        "destination": {
+          "port": "Tin Can Island",
+          "country": "NG",
+          "locode": "NGTCN"
+        },
+        "container_type": "20GP",
+        "charges": [
+          {
+            "name": "Base Freight",
+            "amount": 1800,
+            "currency": "USD",
+            "basis": "PER_UNIT"
+          },
+          {
+            "name": "Terminal Handling",
+            "amount": 120,
+            "currency": "USD",
+            "basis": "PER_CONTAINER"
+          },
+          {
+            "name": "Security Surcharge",
+            "amount": 25,
+            "currency": "USD",
+            "basis": "PER_CONTAINER"
+          }
+        ],
+        "transit_time": 38,
+        "valid_from": "2025-02-01",
+        "valid_to": "2025-05-31",
+        "service_name": "FAL6"
+      }
+    ]
+  }
+}

@@ -18,6 +18,7 @@ import { usersRouter } from "./users";
 import { opportunitiesRouter } from "./opportunities";
 import { activitiesRouter } from "./activities";
 import { marketRouter } from "./market";
+import { rateIngestionRouter } from "./rate-ingestion";
 
 const router = Router();
 
@@ -40,5 +41,6 @@ router.use(usersRouter);
 router.use(opportunitiesRouter);
 router.use(activitiesRouter);
 router.use(marketRouter);
+router.use(rateIngestionRouter);
 
 export default router;
