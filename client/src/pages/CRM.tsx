@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import api from "../lib/api";
 import StatCard from "../components/StatCard";
 import DataTable from "../components/DataTable";
@@ -141,6 +142,7 @@ const emptyContactForm: ContactForm = {
 };
 
 export default function CRM() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("companies");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -424,21 +426,8 @@ export default function CRM() {
     setDraggedOpp(null);
   };
 
-  const loadCompanyDetail = async (c: Company) => {
-    try {
-      const res = await api.get(`/companies/${c._id}`);
-      setSelectedCompany(res.data);
-      await loadActivities(c._id);
-    } catch {
-      // Fallback for dummy data
-      const dummyContacts = DUMMY_CONTACTS.filter(ct => ct.companyName === c.name);
-      setSelectedCompany({
-        company: c,
-        contacts: dummyContacts,
-        stats: { totalRfqs: c.rfqCount || 0, activeRfqs: Math.min(c.rfqCount || 0, 3), totalQuotes: c.quoteCount || 0 },
-      });
-      setActivities([]);
-    }
+  const loadCompanyDetail = (c: Company) => {
+    navigate(`/crm/companies/${c._id}`);
   };
 
   const loadContactDetail = async (c: Contact) => {
@@ -525,7 +514,7 @@ export default function CRM() {
   );
 
   const companyColumns = [
-    { key: "name", header: <SortHeader label="Company" colKey="name" />, render: (c: Company) => <span style={{ fontWeight: 500, color: "var(--text)" }}>{c.name}</span> },
+    { key: "name", header: <SortHeader label="Company" colKey="name" />, render: (c: Company) => <Link to={`/crm/companies/${c._id}`} style={{ fontWeight: 500, color: "var(--text)", textDecoration: "none" }}>{c.name}</Link> },
     { key: "domain", header: <SortHeader label="Domain" colKey="domain" />, render: (c: Company) => <span style={{ fontSize: 11, color: "var(--text3)" }}>{c.domain || "—"}</span> },
     { key: "contactCount", header: <SortHeader label="Contacts" colKey="contactCount" />, render: (c: Company) => c.contactCount ?? 0 },
     { key: "rfqCount", header: <SortHeader label="RFQs" colKey="rfqCount" />, render: (c: Company) => c.rfqCount ?? 0 },
