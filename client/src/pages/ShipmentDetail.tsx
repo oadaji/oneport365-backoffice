@@ -171,6 +171,309 @@ const mockDocuments: ShipmentDoc[] = [
 
 const docCategories = ["All", "Export", "Carrier", "Compliance", "Shipping", "Operations"];
 
+// ── Bills of Lading Data ──
+
+interface BillOfLading {
+  id: string;
+  blNumber: string;
+  type: "MBL" | "HBL"; // Master or House BL
+  status: "draft" | "approved" | "original-issued" | "released" | "surrendered";
+  shipper: { name: string; address: string };
+  consignee: { name: string; address: string };
+  notifyParty: { name: string; address: string };
+  vessel: string;
+  voyage: string;
+  pol: string;
+  pod: string;
+  placeOfDelivery: string;
+  containers: { number: string; seal: string; weight: string; packages: string }[];
+  descriptionOfGoods: string;
+  freightTerms: "Prepaid" | "Collect";
+  issueDate?: string;
+  issuedBy?: string;
+  releaseType?: "Original" | "Telex" | "Seaway Bill";
+  remarks?: string;
+}
+
+const mockBillsOfLading: BillOfLading[] = [
+  {
+    id: "bl1",
+    blNumber: "MEDU-NGS-0029834",
+    type: "MBL",
+    status: "draft",
+    shipper: { name: "OnePort 365 Limited", address: "Plot 42, Apapa-Oshodi Expressway, Lagos, Nigeria" },
+    consignee: { name: "Ghana Trading Co. Ltd", address: "12 Independence Avenue, Accra, Ghana" },
+    notifyParty: { name: "Same as Consignee", address: "" },
+    vessel: "MSC OSCAR",
+    voyage: "FN618R",
+    pol: "Apapa, Nigeria (NGAPP)",
+    pod: "Tema, Ghana (GHTEM)",
+    placeOfDelivery: "Tema Port, Ghana",
+    containers: [
+      { number: "MEDU 782314-5", seal: "OP365-001", weight: "24,000 KG", packages: "1,200 Bags" },
+      { number: "MEDU 913527-8", seal: "OP365-002", weight: "24,000 KG", packages: "1,200 Bags" },
+    ],
+    descriptionOfGoods: "Cement Clinker in 50kg bags. HS Code: 2523.10. Gross Weight: 48,000 KG",
+    freightTerms: "Prepaid",
+    remarks: "Pending freight payment confirmation from customer",
+  },
+  {
+    id: "bl2",
+    blNumber: "OP365-HBL-26050142",
+    type: "HBL",
+    status: "draft",
+    shipper: { name: "BUA Cement Plc", address: "1, BUA Road, Sokoto, Nigeria" },
+    consignee: { name: "Ghana Trading Co. Ltd", address: "12 Independence Avenue, Accra, Ghana" },
+    notifyParty: { name: "GTC Logistics", address: "Tema Port Free Zone, Ghana" },
+    vessel: "MSC OSCAR",
+    voyage: "FN618R",
+    pol: "Apapa, Nigeria (NGAPP)",
+    pod: "Tema, Ghana (GHTEM)",
+    placeOfDelivery: "Customer Warehouse, Accra",
+    containers: [
+      { number: "MEDU 782314-5", seal: "OP365-001", weight: "24,000 KG", packages: "1,200 Bags" },
+      { number: "MEDU 913527-8", seal: "OP365-002", weight: "24,000 KG", packages: "1,200 Bags" },
+    ],
+    descriptionOfGoods: "Cement Clinker in 50kg bags. HS Code: 2523.10. Gross Weight: 48,000 KG. Shipper's Load, Stow & Count.",
+    freightTerms: "Prepaid",
+    remarks: "House BL for customer. Original required for cargo release.",
+  },
+];
+
+function BillsOfLadingSection() {
+  const [bls] = useState(mockBillsOfLading);
+  const [selectedBL, setSelectedBL] = useState<BillOfLading | null>(null);
+  const [blFilter, setBLFilter] = useState<"all" | "MBL" | "HBL">("all");
+
+  const filtered = blFilter === "all" ? bls : bls.filter(bl => bl.type === blFilter);
+
+  const statusBadge = (status: BillOfLading["status"]) => {
+    const map: Record<string, { bg: string; color: string; label: string }> = {
+      draft: { bg: "#fef3e6", color: "#b45309", label: "Draft" },
+      approved: { bg: "#eff4ff", color: "#2563eb", label: "Approved" },
+      "original-issued": { bg: "#e6f7ec", color: "#166534", label: "Original Issued" },
+      released: { bg: "#e6f7ec", color: "#16a34a", label: "Released" },
+      surrendered: { bg: "#f3f5f3", color: "#6b7670", label: "Surrendered" },
+    };
+    const s = map[status] || { bg: "#f3f5f3", color: "#6b7670", label: status };
+    return <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 10, background: s.bg, color: s.color }}>{s.label}</span>;
+  };
+
+  const typeBadge = (type: "MBL" | "HBL") => {
+    const map = {
+      MBL: { bg: "#1a1a2e", color: "#f5c518", label: "Master BL" },
+      HBL: { bg: "#16a34a", color: "#fff", label: "House BL" },
+    };
+    const t = map[type];
+    return <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: t.bg, color: t.color }}>{t.label}</span>;
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Header */}
+      <div style={{ background: "#fff", border: "1px solid #e8ebe7", borderRadius: 10, overflow: "hidden" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid #e8ebe7" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>Bills of Lading ({bls.length})</span>
+            <div style={{ display: "flex", gap: 4 }}>
+              {(["all", "MBL", "HBL"] as const).map(f => (
+                <button key={f} onClick={() => setBLFilter(f)} style={{
+                  padding: "4px 10px", fontSize: 10, fontWeight: 500, border: "none", borderRadius: 5, cursor: "pointer",
+                  background: blFilter === f ? "#16a34a" : "#f3f5f3",
+                  color: blFilter === f ? "#fff" : "#6b7670",
+                }}>{f === "all" ? "All" : f}</button>
+              ))}
+            </div>
+          </div>
+          <button style={{
+            padding: "6px 12px", fontSize: 11, fontWeight: 500, background: "#16a34a", border: "none",
+            borderRadius: 6, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", gap: 4,
+          }}>
+            <Plus size={12} /> Create BL
+          </button>
+        </div>
+
+        {/* BL List */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "140px 80px 1fr 100px 100px 80px",
+          padding: "8px 16px", fontSize: 10, fontWeight: 600, color: "#6b7670",
+          textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #e8ebe7", background: "#f9faf9",
+        }}>
+          <div>BL Number</div>
+          <div>Type</div>
+          <div>Shipper / Consignee</div>
+          <div>Vessel</div>
+          <div>Status</div>
+          <div>Actions</div>
+        </div>
+
+        {filtered.map(bl => (
+          <div key={bl.id} onClick={() => setSelectedBL(bl)} style={{
+            display: "grid", gridTemplateColumns: "140px 80px 1fr 100px 100px 80px",
+            padding: "12px 16px", fontSize: 12, borderBottom: "1px solid #e8ebe7", alignItems: "center",
+            cursor: "pointer", background: selectedBL?.id === bl.id ? "#f7faf7" : "#fff",
+          }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600 }}>{bl.blNumber}</div>
+            <div>{typeBadge(bl.type)}</div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: "#1a2520" }}>{bl.shipper.name}</div>
+              <div style={{ fontSize: 10, color: "#6b7670" }}>To: {bl.consignee.name}</div>
+            </div>
+            <div style={{ fontSize: 11, color: "#6b7670" }}>{bl.vessel}</div>
+            <div>{statusBadge(bl.status)}</div>
+            <div style={{ display: "flex", gap: 4 }}>
+              <button onClick={e => { e.stopPropagation(); }} style={{
+                padding: "4px 8px", fontSize: 10, background: "#f3f5f3", border: "none", borderRadius: 4, cursor: "pointer", color: "#6b7670",
+              }}>
+                <Eye size={12} />
+              </button>
+              <button onClick={e => { e.stopPropagation(); }} style={{
+                padding: "4px 8px", fontSize: 10, background: "#f3f5f3", border: "none", borderRadius: 4, cursor: "pointer", color: "#6b7670",
+              }}>
+                <Download size={12} />
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {filtered.length === 0 && (
+          <div style={{ padding: 32, textAlign: "center", color: "#9aa39d", fontSize: 13 }}>No bills of lading found</div>
+        )}
+      </div>
+
+      {/* BL Detail Panel */}
+      {selectedBL && (
+        <div style={{ background: "#fff", border: "1px solid #e8ebe7", borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid #e8ebe7", background: "#f9faf9" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>{selectedBL.blNumber}</span>
+              {typeBadge(selectedBL.type)}
+              {statusBadge(selectedBL.status)}
+            </div>
+            <button onClick={() => setSelectedBL(null)} style={{
+              padding: "4px 8px", fontSize: 10, background: "#f3f5f3", border: "none", borderRadius: 4, cursor: "pointer", color: "#6b7670",
+            }}>
+              <X size={14} />
+            </button>
+          </div>
+
+          <div style={{ padding: 16 }}>
+            {/* Parties */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 20 }}>
+              <div style={{ background: "#f9faf9", padding: 12, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7670", textTransform: "uppercase", marginBottom: 6 }}>Shipper</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#1a2520" }}>{selectedBL.shipper.name}</div>
+                <div style={{ fontSize: 11, color: "#6b7670", marginTop: 4 }}>{selectedBL.shipper.address}</div>
+              </div>
+              <div style={{ background: "#f9faf9", padding: 12, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7670", textTransform: "uppercase", marginBottom: 6 }}>Consignee</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#1a2520" }}>{selectedBL.consignee.name}</div>
+                <div style={{ fontSize: 11, color: "#6b7670", marginTop: 4 }}>{selectedBL.consignee.address}</div>
+              </div>
+              <div style={{ background: "#f9faf9", padding: 12, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7670", textTransform: "uppercase", marginBottom: 6 }}>Notify Party</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#1a2520" }}>{selectedBL.notifyParty.name}</div>
+                {selectedBL.notifyParty.address && <div style={{ fontSize: 11, color: "#6b7670", marginTop: 4 }}>{selectedBL.notifyParty.address}</div>}
+              </div>
+            </div>
+
+            {/* Voyage Details */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7670", textTransform: "uppercase", marginBottom: 4 }}>Vessel / Voyage</div>
+                <div style={{ fontSize: 12, fontWeight: 500 }}>{selectedBL.vessel} / {selectedBL.voyage}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7670", textTransform: "uppercase", marginBottom: 4 }}>Port of Loading</div>
+                <div style={{ fontSize: 12, fontWeight: 500 }}>{selectedBL.pol}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7670", textTransform: "uppercase", marginBottom: 4 }}>Port of Discharge</div>
+                <div style={{ fontSize: 12, fontWeight: 500 }}>{selectedBL.pod}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7670", textTransform: "uppercase", marginBottom: 4 }}>Place of Delivery</div>
+                <div style={{ fontSize: 12, fontWeight: 500 }}>{selectedBL.placeOfDelivery}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7670", textTransform: "uppercase", marginBottom: 4 }}>Freight Terms</div>
+                <div style={{ fontSize: 12, fontWeight: 500 }}>{selectedBL.freightTerms}</div>
+              </div>
+            </div>
+
+            {/* Containers */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7670", textTransform: "uppercase", marginBottom: 8 }}>Containers ({selectedBL.containers.length})</div>
+              <div style={{ border: "1px solid #e8ebe7", borderRadius: 8, overflow: "hidden" }}>
+                <div style={{
+                  display: "grid", gridTemplateColumns: "150px 100px 100px 1fr",
+                  padding: "8px 12px", fontSize: 10, fontWeight: 600, color: "#6b7670", background: "#f9faf9", borderBottom: "1px solid #e8ebe7",
+                }}>
+                  <div>Container No.</div>
+                  <div>Seal No.</div>
+                  <div>Weight</div>
+                  <div>Packages</div>
+                </div>
+                {selectedBL.containers.map((c, i) => (
+                  <div key={i} style={{
+                    display: "grid", gridTemplateColumns: "150px 100px 100px 1fr",
+                    padding: "10px 12px", fontSize: 12, borderBottom: i < selectedBL.containers.length - 1 ? "1px solid #e8ebe7" : "none",
+                  }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{c.number}</div>
+                    <div style={{ fontSize: 11, color: "#6b7670" }}>{c.seal}</div>
+                    <div style={{ fontSize: 11 }}>{c.weight}</div>
+                    <div style={{ fontSize: 11, color: "#6b7670" }}>{c.packages}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Description of Goods */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7670", textTransform: "uppercase", marginBottom: 6 }}>Description of Goods</div>
+              <div style={{ fontSize: 12, color: "#1a2520", background: "#f9faf9", padding: 12, borderRadius: 8, lineHeight: 1.5 }}>
+                {selectedBL.descriptionOfGoods}
+              </div>
+            </div>
+
+            {/* Remarks */}
+            {selectedBL.remarks && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7670", textTransform: "uppercase", marginBottom: 6 }}>Remarks</div>
+                <div style={{ fontSize: 12, color: "#b45309", background: "#fef3e6", padding: 12, borderRadius: 8 }}>
+                  {selectedBL.remarks}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 12, borderTop: "1px solid #e8ebe7" }}>
+              <button style={{
+                padding: "8px 16px", fontSize: 11, fontWeight: 500, background: "#fff", border: "1px solid #d4d9d2",
+                borderRadius: 6, cursor: "pointer", color: "#6b7670", display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <FileText size={14} /> Edit Draft
+              </button>
+              <button style={{
+                padding: "8px 16px", fontSize: 11, fontWeight: 500, background: "#fff", border: "1px solid #d4d9d2",
+                borderRadius: 6, cursor: "pointer", color: "#6b7670", display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <Download size={14} /> Download PDF
+              </button>
+              <button style={{
+                padding: "8px 16px", fontSize: 11, fontWeight: 500, background: "#16a34a", border: "none",
+                borderRadius: 6, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <Send size={14} /> Request Approval
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DocumentsSection() {
   const [docFilter, setDocFilter] = useState("All");
   const [showUpload, setShowUpload] = useState(false);
@@ -1348,7 +1651,9 @@ export default function ShipmentDetail() {
           {/* Documents tab */}
           {activeTab === "Documents" && <DocumentsSection />}
 
-          {/* Overview tab (default) */}
+          {/* Bills of Lading tab */}
+          {activeTab === "Bills of Lading" && <BillsOfLadingSection />}
+
           {/* Finance tab */}
           {activeTab === "Finance" && <FinanceSection contractValue={s.contractValue} />}
 
@@ -1492,7 +1797,7 @@ export default function ShipmentDetail() {
           </>}
 
           {/* Placeholder for other tabs */}
-          {!["Overview", "Containers", "Progress", "Finance", "Documents"].includes(activeTab) && activeTab !== "Finance" && (
+          {!["Overview", "Containers", "Progress", "Finance", "Documents", "Bills of Lading"].includes(activeTab) && (
             <div style={{ background: "#fff", border: "1px solid #e8ebe7", borderRadius: 10, padding: 40, textAlign: "center", color: "#9aa39d", fontSize: 13 }}>
               {activeTab} section — coming soon
             </div>
